@@ -5,8 +5,8 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — CanWinBuddy" }] }),
@@ -14,12 +14,12 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user, username } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
-    await signOut();
+    await supabase.auth.signOut();
     toast.success("Signed out");
     navigate({ to: "/auth" });
   };
