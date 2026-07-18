@@ -37,7 +37,7 @@ function SettingsPage() {
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between border-b border-border pb-3">
               <span className="text-muted-foreground">Username</span>
-              <span className="font-medium">{user?.username}</span>
+              <span className="font-medium">{username ?? "—"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">User ID</span>
