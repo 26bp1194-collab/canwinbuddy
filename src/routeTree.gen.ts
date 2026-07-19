@@ -17,6 +17,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedGenerateRouteImport } from './routes/_authenticated/generate'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedExportIdRouteImport } from './routes/_authenticated/export.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -57,6 +58,11 @@ const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedHistoryRoute,
 } as any)
+const AuthenticatedExportIdRoute = AuthenticatedExportIdRouteImport.update({
+  id: '/export/$id',
+  path: '/export/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/generate': typeof AuthenticatedGenerateRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRoute
+  '/export/$id': typeof AuthenticatedExportIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesByTo {
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/generate': typeof AuthenticatedGenerateRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRoute
+  '/export/$id': typeof AuthenticatedExportIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesById {
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/_authenticated/generate': typeof AuthenticatedGenerateRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/export/$id': typeof AuthenticatedExportIdRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRouteTypes {
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/generate'
     | '/history'
     | '/settings'
+    | '/export/$id'
     | '/history/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/generate'
     | '/history'
     | '/settings'
+    | '/export/$id'
     | '/history/$id'
   id:
     | '__root__'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '/_authenticated/generate'
     | '/_authenticated/history'
     | '/_authenticated/settings'
+    | '/_authenticated/export/$id'
     | '/_authenticated/history/$id'
   fileRoutesById: FileRoutesById
 }
@@ -182,6 +194,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
     }
+    '/_authenticated/export/$id': {
+      id: '/_authenticated/export/$id'
+      path: '/export/$id'
+      fullPath: '/export/$id'
+      preLoaderRoute: typeof AuthenticatedExportIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -201,6 +220,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedGenerateRoute: typeof AuthenticatedGenerateRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedExportIdRoute: typeof AuthenticatedExportIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -208,6 +228,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedGenerateRoute: AuthenticatedGenerateRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedExportIdRoute: AuthenticatedExportIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

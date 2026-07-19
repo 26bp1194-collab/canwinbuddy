@@ -85,7 +85,7 @@ function GeneratePage() {
 
       setStage("done");
       toast.success(`Generated ${questions.length} verified questions.`);
-      navigate({ to: "/history/$id", params: { id: inserted.id } });
+      navigate({ to: "/export/$id", params: { id: inserted.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
       setStage("input");
