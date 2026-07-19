@@ -10,7 +10,16 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/history")({
-  head: () => ({ meta: [{ title: "History — CanWinBuddy" }] }),
+  head: () => ({
+    meta: [
+      { title: "Quiz History — CanWinBuddy" },
+      { name: "description", content: "Browse every quiz set you've generated. Reopen a set to play, copy, or export it to Blooket, Gimkit, or Kahoot." },
+      { property: "og:title", content: "Quiz History — CanWinBuddy" },
+      { property: "og:description", content: "Every quiz set you've generated, saved and ready to reopen." },
+      { property: "og:url", content: "/history" },
+    ],
+    links: [{ rel: "canonical", href: "/history" }],
+  }),
   component: HistoryPage,
 });
 
@@ -83,6 +92,7 @@ function HistoryPage() {
                     size="icon"
                     onClick={() => del.mutate(row.id)}
                     className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete quiz set ${row.title}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

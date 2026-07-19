@@ -12,7 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/export/$id")({
-  head: () => ({ meta: [{ title: "Export questions — CanWinBuddy" }] }),
+  head: ({ params }) => ({
+    meta: [
+      { title: "Export Quiz Questions — CanWinBuddy" },
+      { name: "description", content: "Copy your generated questions in the exact format required by Blooket, Gimkit, Gimkit 2, or Kahoot." },
+      { property: "og:title", content: "Export Quiz Questions — CanWinBuddy" },
+      { property: "og:description", content: "Copy questions in Blooket, Gimkit, or Kahoot format." },
+      { property: "og:url", content: `/export/${params.id}` },
+    ],
+    links: [{ rel: "canonical", href: `/export/${params.id}` }],
+  }),
   component: ExportPage,
 });
 

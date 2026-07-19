@@ -9,7 +9,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — CanWinBuddy" }] }),
+  head: () => ({
+    meta: [
+      { title: "Account Settings — CanWinBuddy" },
+      { name: "description", content: "Manage your CanWinBuddy account details and switch between dark and light appearance." },
+      { property: "og:title", content: "Account Settings — CanWinBuddy" },
+      { property: "og:description", content: "Manage your CanWinBuddy account and theme preferences." },
+      { property: "og:url", content: "/settings" },
+    ],
+    links: [{ rel: "canonical", href: "/settings" }],
+  }),
   component: SettingsPage,
 });
 

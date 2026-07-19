@@ -16,7 +16,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/generate")({
-  head: () => ({ meta: [{ title: "Generate — CanWinBuddy" }] }),
+  head: () => ({
+    meta: [
+      { title: "Generate Quiz Questions — CanWinBuddy" },
+      { name: "description", content: "Paste text or upload PDFs, docs, spreadsheets, or images. AI generates and validates quiz questions against your source." },
+      { property: "og:title", content: "Generate Quiz Questions — CanWinBuddy" },
+      { property: "og:description", content: "Turn any document into validated quiz questions in seconds." },
+      { property: "og:url", content: "/generate" },
+    ],
+    links: [{ rel: "canonical", href: "/generate" }],
+  }),
   component: GeneratePage,
 });
 
@@ -148,7 +157,11 @@ function GeneratePage() {
                           <span className="truncate">{f.name}</span>
                           <span className="shrink-0 text-xs text-muted-foreground">({(f.size / 1024).toFixed(0)} KB)</span>
                         </span>
-                        <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label={`Remove ${f.name}`}
+                        >
                           <X className="h-4 w-4" />
                         </button>
                       </li>

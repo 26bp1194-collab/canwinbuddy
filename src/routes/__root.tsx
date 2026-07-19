@@ -47,8 +47,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "CanWinBuddy — AI Quiz Generator for Blooket, Gimkit & More" },
       { name: "description", content: "Generate validated quiz questions from any text, image, or document. Export to Blooket, Gimkit, Kahoot, or play in-app." },
-      { property: "og:title", content: "CanWinBuddy — AI Quiz Generator" },
-      { property: "og:description", content: "Generate validated quiz questions from any source. Play in-app or export to Blooket & Gimkit." },
+      { property: "og:site_name", content: "CanWinBuddy" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -58,6 +57,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "CanWinBuddy",
+          description: "AI quiz generator that validates every question against your source material and exports to Blooket, Gimkit, and Kahoot.",
+          url: "/",
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "CanWinBuddy",
+          description: "AI-powered quiz question generator for teachers and students.",
+          url: "/",
+        }),
+      },
     ],
   }),
   shellComponent: RootShell,
