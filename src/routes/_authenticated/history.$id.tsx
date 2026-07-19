@@ -19,7 +19,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/_authenticated/history/$id")({
-  head: () => ({ meta: [{ title: "Quiz set — CanWinBuddy" }] }),
+  head: ({ params }) => ({
+    meta: [
+      { title: "Quiz Set Details — CanWinBuddy" },
+      { name: "description", content: "View, play, or export this saved quiz set. Copy clean text or download for Blooket, Gimkit, or Quizlet." },
+      { property: "og:title", content: "Quiz Set Details — CanWinBuddy" },
+      { property: "og:description", content: "Play or export a saved CanWinBuddy quiz set." },
+      { property: "og:url", content: `/history/${params.id}` },
+    ],
+    links: [{ rel: "canonical", href: `/history/${params.id}` }],
+  }),
   component: HistoryDetail,
 });
 

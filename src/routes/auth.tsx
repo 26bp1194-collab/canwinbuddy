@@ -12,7 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Sign in — CanWinBuddy" }] }),
+  head: () => ({
+    meta: [
+      { title: "Sign in — CanWinBuddy AI Quiz Generator" },
+      { name: "description", content: "Sign in or create a CanWinBuddy account to generate AI quiz questions and export them to Blooket, Gimkit, and Kahoot." },
+      { property: "og:title", content: "Sign in — CanWinBuddy AI Quiz Generator" },
+      { property: "og:description", content: "Access your CanWinBuddy account to generate and export validated quiz questions." },
+      { property: "og:url", content: "/auth" },
+    ],
+    links: [{ rel: "canonical", href: "/auth" }],
+  }),
   component: AuthPage,
 });
 
@@ -112,7 +121,7 @@ function AuthPage() {
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">CanWinBuddy</h1>
+            <h1 className="text-xl font-semibold tracking-tight">CanWinBuddy — AI Quiz Generator</h1>
             <p className="text-xs text-muted-foreground">AI-generated quiz questions, verified.</p>
           </div>
         </div>

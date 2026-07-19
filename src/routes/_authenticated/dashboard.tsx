@@ -9,7 +9,16 @@ import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — CanWinBuddy" }] }),
+  head: () => ({
+    meta: [
+      { title: "Your Quiz Dashboard — CanWinBuddy" },
+      { name: "description", content: "Overview of your quiz generation activity: total sets, questions generated, and recent quiz history." },
+      { property: "og:title", content: "Your Quiz Dashboard — CanWinBuddy" },
+      { property: "og:description", content: "See your quiz generation stats and jump into recent quiz sets." },
+      { property: "og:url", content: "/dashboard" },
+    ],
+    links: [{ rel: "canonical", href: "/dashboard" }],
+  }),
   component: Dashboard,
 });
 
@@ -35,8 +44,8 @@ function Dashboard() {
   return (
     <div className="mx-auto max-w-6xl px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <p className="text-sm text-muted-foreground">Welcome back</p>
-        <h1 className="mt-1 text-4xl font-bold tracking-tight">@{username}</h1>
+        <p className="text-sm text-muted-foreground">Welcome back, @{username}</p>
+        <h1 className="mt-1 text-4xl font-bold tracking-tight">Your Quiz Dashboard</h1>
         <p className="mt-2 text-muted-foreground">Your AI quiz factory — ready to generate.</p>
       </motion.div>
 
@@ -56,7 +65,7 @@ function Dashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
               <Sparkles className="h-5 w-5" />
             </div>
-            <h3 className="text-lg font-semibold">Generate new set</h3>
+            <h2 className="text-lg font-semibold">Generate new set</h2>
           </div>
           <p className="text-sm text-muted-foreground">Paste text, upload a doc, spreadsheet, or image. AI extracts and validates every question against the source.</p>
           <Button asChild className="mt-4" size="lg">
@@ -69,7 +78,7 @@ function Dashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
               <History className="h-5 w-5" />
             </div>
-            <h3 className="text-lg font-semibold">Recent sets</h3>
+            <h2 className="text-lg font-semibold">Recent sets</h2>
           </div>
           {stats?.recent.length ? (
             <ul className="space-y-2">
