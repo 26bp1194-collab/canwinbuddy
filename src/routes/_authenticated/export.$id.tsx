@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Question } from "@/lib/ai.functions";
-import { downloadFile, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
+import { downloadForPlatform, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,14 +47,13 @@ function ExportPage() {
   const copy = async () => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    toast.success(`Copied ${PLATFORM_LABELS[platform]} format to clipboard`);
+    toast.success(`Copied ${PLATFORM_LABELS[platform]} — paste into a spreadsheet`);
     setTimeout(() => setCopied(false), 1600);
   };
 
   const download = () => {
-    const safe = (data?.title ?? "questions").replace(/[^\w\s-]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "questions";
-    downloadFile(`${safe}-${platform}.txt`, text, "text/plain");
-    toast.success(`Downloaded ${PLATFORM_LABELS[platform]} format`);
+    const ext = downloadForPlatform(platform, questions, data?.title ?? "questions");
+    toast.success(`Downloaded ${PLATFORM_LABELS[platform]} .${ext}`);
   };
 
   if (isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
