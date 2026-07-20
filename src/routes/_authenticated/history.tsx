@@ -81,7 +81,7 @@ function HistoryPage() {
                 className="panel"
               >
                 <div className="flex items-center justify-between gap-4 p-5">
-                  <Link to="/history/$id" params={{ id: row.id }} className="min-w-0 flex-1">
+                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 flex-1">
                     <p className="truncate font-medium">{row.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {row.question_count} questions · {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
