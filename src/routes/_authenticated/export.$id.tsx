@@ -1,13 +1,14 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, History } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Copy, Check, ArrowLeft, Play, Download, History } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Question } from "@/lib/ai.functions";
-import { formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
+import { downloadFile, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
+import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -27,9 +28,9 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
 
 function ExportPage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
   const [platform, setPlatform] = useState<Platform>("blooket");
   const [copied, setCopied] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["quiz-set", id],
@@ -48,6 +49,12 @@ function ExportPage() {
     setCopied(true);
     toast.success(`Copied ${PLATFORM_LABELS[platform]} format to clipboard`);
     setTimeout(() => setCopied(false), 1600);
+  };
+
+  const download = () => {
+    const safe = (data?.title ?? "questions").replace(/[^\w\s-]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "questions";
+    downloadFile(`${safe}-${platform}.txt`, text, "text/plain");
+    toast.success(`Downloaded ${PLATFORM_LABELS[platform]} format`);
   };
 
   if (isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
@@ -81,12 +88,15 @@ function ExportPage() {
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate({ to: "/history/$id", params: { id } })}>
-              <Play className="mr-2 h-4 w-4" /> Play & details
-            </Button>
             <Button onClick={copy}>
               {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
               {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button variant="secondary" onClick={download}>
+              <Download className="mr-2 h-4 w-4" /> Download
+            </Button>
+            <Button variant="secondary" onClick={() => setPlaying(true)}>
+              <Play className="mr-2 h-4 w-4" /> Play
             </Button>
           </div>
         </div>
@@ -98,6 +108,10 @@ function ExportPage() {
 {text}
         </pre>
       </div>
+
+      <AnimatePresence>
+        {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
+      </AnimatePresence>
 
       <div className="mt-6 flex items-center justify-between text-sm">
         <Link to="/history" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground">
