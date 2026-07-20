@@ -46,7 +46,7 @@ function Dashboard() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
         <p className="text-sm text-muted-foreground">Welcome back, @{username}</p>
         <h1 className="mt-1 text-4xl font-bold tracking-tight">Your Quiz Dashboard</h1>
-        <p className="mt-2 text-muted-foreground">Your AI quiz factory — ready to generate.</p>
+        <p className="mt-2 text-muted-foreground">Your intelligent question workspace — ready to generate.</p>
       </motion.div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
