@@ -6,6 +6,7 @@ import {
   Sparkles,
   History,
   Settings,
+  BookOpen,
   ChevronLeft,
   Sun,
   Moon,
@@ -24,6 +25,7 @@ const nav = [
   { to: "/generate", label: "Generate", icon: Sparkles },
   { to: "/history", label: "History", icon: History },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/guide", label: "Guide", icon: BookOpen },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {

@@ -37,6 +37,7 @@ function GeneratePage() {
   const [source, setSource] = useState("");
   const [title, setTitle] = useState("");
   const [count, setCount] = useState(10);
+  const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
@@ -118,7 +119,12 @@ function GeneratePage() {
               </div>
 
               <div>
-                <Label htmlFor="src" className="mb-2 block">Source text</Label>
+                <div className="mb-2 flex items-center justify-between">
+                  <Label htmlFor="src">Source text</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+                  </span>
+                </div>
                 <Textarea
                   id="src"
                   value={source}
@@ -172,8 +178,8 @@ function GeneratePage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="count" className="mb-2 block">Number of questions</Label>
-                  <Input id="count" type="number" min={3} max={30} value={count} onChange={(e) => setCount(Math.max(3, Math.min(30, Number(e.target.value) || 10)))} />
+                  <Label htmlFor="count" className="mb-2 block">Amount of questions</Label>
+                  <Input id="count" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
                 </div>
                 <div>
                   <Label className="mb-2 block">Difficulty</Label>
