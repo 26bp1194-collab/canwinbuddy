@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Question } from "@/lib/ai.functions";
-import { toStrippedClipboard, toBlooketCSV, toGimkitTSV, toQuizletTSV, downloadFile } from "@/lib/export";
+import { toStrippedClipboard, downloadForPlatform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 
 import { Button } from "@/components/ui/button";
