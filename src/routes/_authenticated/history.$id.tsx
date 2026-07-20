@@ -78,14 +78,17 @@ function HistoryDetail() {
               <Button variant="secondary"><Download className="mr-2 h-4 w-4" /> Export</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { downloadFile(`${data.title}-blooket.csv`, toBlooketCSV(questions), "text/csv"); toast.success("Blooket CSV downloaded"); }}>
+              <DropdownMenuItem onClick={() => { downloadForPlatform("blooket", questions, data.title); toast.success("Blooket CSV downloaded"); }}>
                 Blooket (.csv)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { downloadFile(`${data.title}-gimkit.tsv`, toGimkitTSV(questions), "text/tab-separated-values"); toast.success("Gimkit TSV downloaded"); }}>
-                Gimkit (.tsv)
+              <DropdownMenuItem onClick={() => { downloadForPlatform("gimkit", questions, data.title); toast.success("Gimkit CSV downloaded"); }}>
+                Gimkit (.csv)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { downloadFile(`${data.title}-quizlet.tsv`, toQuizletTSV(questions), "text/tab-separated-values"); toast.success("Quizlet TSV downloaded"); }}>
-                Quizlet (.tsv)
+              <DropdownMenuItem onClick={() => { downloadForPlatform("gimkit2", questions, data.title); toast.success("Gimkit 2 CSV downloaded"); }}>
+                Gimkit 2 (.csv)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { downloadForPlatform("kahoot", questions, data.title); toast.success("Kahoot XLSX downloaded"); }}>
+                Kahoot (.xlsx)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
