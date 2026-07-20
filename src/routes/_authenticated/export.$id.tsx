@@ -88,12 +88,16 @@ function ExportPage() {
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate({ to: "/history/$id", params: { id } })}>
-              <Play className="mr-2 h-4 w-4" /> Play & details
-            </Button>
+          <div className="flex gap-2">
             <Button onClick={copy}>
               {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
               {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button variant="secondary" onClick={download}>
+              <Download className="mr-2 h-4 w-4" /> Download
+            </Button>
+            <Button variant="secondary" onClick={() => setPlaying(true)}>
+              <Play className="mr-2 h-4 w-4" /> Play
             </Button>
           </div>
         </div>
@@ -105,6 +109,10 @@ function ExportPage() {
 {text}
         </pre>
       </div>
+
+      <AnimatePresence>
+        {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
+      </AnimatePresence>
 
       <div className="mt-6 flex items-center justify-between text-sm">
         <Link to="/history" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground">
