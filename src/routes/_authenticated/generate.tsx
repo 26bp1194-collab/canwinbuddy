@@ -217,7 +217,8 @@ function GeneratePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="count" className="mb-2 block">Amount of questions</Label>
-                  <Input id="count" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
+                  <Input id="count" type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} />
+                  <p className="mt-1 text-xs text-muted-foreground">1–30 questions per set.</p>
                 </div>
                 <div>
                   <Label className="mb-2 block">Difficulty</Label>
