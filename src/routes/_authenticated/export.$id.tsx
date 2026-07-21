@@ -100,17 +100,36 @@ function ExportPage() {
 
       <div className="panel mt-8 p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-[220px]">
-            <label className="mb-2 block text-sm font-medium">Target platform</label>
-            <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="blooket">Blooket</SelectItem>
-                <SelectItem value="gimkit">Gimkit</SelectItem>
-                <SelectItem value="gimkit2">Gimkit 2</SelectItem>
-                <SelectItem value="kahoot">Kahoot</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Question format</label>
+              <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
+                <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blooket">Blooket</SelectItem>
+                  <SelectItem value="gimkit">Gimkit</SelectItem>
+                  <SelectItem value="gimkit2">Gimkit 2</SelectItem>
+                  <SelectItem value="kahoot">Kahoot</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium">Language</label>
+              <Select value={language} onValueChange={changeLanguage} disabled={translating}>
+                <SelectTrigger className="w-[200px]">
+                  {translating ? (
+                    <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Translating…</span>
+                  ) : (
+                    <SelectValue />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button onClick={copy}>
