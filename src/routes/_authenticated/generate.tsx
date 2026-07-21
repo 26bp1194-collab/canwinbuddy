@@ -152,11 +152,16 @@ function GeneratePage() {
               </div>
 
               <div>
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-2 flex items-center justify-between gap-2">
                   <Label htmlFor="src">Source text</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="secondary" size="sm" onClick={openHelper}>
+                      <Wand2 className="mr-2 h-4 w-4" /> AI Text Helper
+                    </Button>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+                    </span>
+                  </div>
                 </div>
                 <Textarea
                   id="src"
