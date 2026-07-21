@@ -2,11 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Question } from "@/lib/ai.functions";
+import { translateQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
