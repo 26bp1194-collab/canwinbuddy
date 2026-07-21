@@ -12,7 +12,7 @@ export type Question = z.infer<typeof QuestionSchema>;
 
 const InputSchema = z.object({
   sourceText: z.string().min(20),
-  count: z.number().int().min(3).max(30),
+  count: z.number().int().min(1).max(30),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
 });
 
