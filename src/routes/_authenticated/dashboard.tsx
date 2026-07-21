@@ -74,23 +74,28 @@ function Dashboard() {
         </motion.div>
 
         <motion.div whileHover={{ y: -2 }} className="panel p-6">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
-              <History className="h-5 w-5" />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <History className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-semibold">Recent sets</h2>
             </div>
-            <h2 className="text-lg font-semibold">Recent sets</h2>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/history">View history</Link>
+            </Button>
           </div>
           {stats?.recent.length ? (
             <ul className="space-y-2">
               {stats.recent.map((r) => (
                 <li key={r.id}>
                   <Link
-                    to="/history/$id"
+                    to="/export/$id"
                     params={{ id: r.id }}
-                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent"
+                    className="flex items-center justify-between rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-accent"
                   >
                     <span className="truncate font-medium">{r.title}</span>
-                    <span className="ml-4 shrink-0 text-xs text-muted-foreground">{r.question_count} Qs</span>
+                    <span className="ml-4 shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">{r.question_count} Qs</span>
                   </Link>
                 </li>
               ))}

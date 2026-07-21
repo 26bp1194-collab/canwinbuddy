@@ -2,11 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Question } from "@/lib/ai.functions";
+import { translateQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,18 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
   component: ExportPage,
 });
 
+const LANGUAGES = [
+  "English", "Spanish", "French", "German", "Italian", "Portuguese",
+  "Dutch", "Polish", "Russian", "Ukrainian", "Turkish", "Arabic",
+  "Hindi", "Chinese (Simplified)", "Chinese (Traditional)", "Japanese", "Korean", "Vietnamese",
+];
+
 function ExportPage() {
   const { id } = Route.useParams();
   const [platform, setPlatform] = useState<Platform>("blooket");
+  const [language, setLanguage] = useState<string>("English");
+  const [translated, setTranslated] = useState<Record<string, Question[]>>({});
+  const [translating, setTranslating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [playing, setPlaying] = useState(false);
 
@@ -41,8 +50,25 @@ function ExportPage() {
     },
   });
 
-  const questions = (data?.questions as unknown as Question[]) ?? [];
+  const original = (data?.questions as unknown as Question[]) ?? [];
+  const questions = language === "English" ? original : (translated[language] ?? original);
   const text = useMemo(() => formatFor(platform, questions), [platform, questions]);
+
+  const changeLanguage = async (lang: string) => {
+    setLanguage(lang);
+    if (lang === "English" || translated[lang] || original.length === 0) return;
+    setTranslating(true);
+    try {
+      const { questions: out } = await translateQuestions({ data: { questions: original, language: lang } });
+      setTranslated((prev) => ({ ...prev, [lang]: out }));
+      toast.success(`Translated to ${lang}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Translation failed");
+      setLanguage("English");
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
@@ -74,17 +100,36 @@ function ExportPage() {
 
       <div className="panel mt-8 p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-[220px]">
-            <label className="mb-2 block text-sm font-medium">Target platform</label>
-            <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="blooket">Blooket</SelectItem>
-                <SelectItem value="gimkit">Gimkit</SelectItem>
-                <SelectItem value="gimkit2">Gimkit 2</SelectItem>
-                <SelectItem value="kahoot">Kahoot</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Question format</label>
+              <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
+                <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blooket">Blooket</SelectItem>
+                  <SelectItem value="gimkit">Gimkit</SelectItem>
+                  <SelectItem value="gimkit2">Gimkit 2</SelectItem>
+                  <SelectItem value="kahoot">Kahoot</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium">Language</label>
+              <Select value={language} onValueChange={changeLanguage} disabled={translating}>
+                <SelectTrigger className="w-[200px]">
+                  {translating ? (
+                    <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Translating…</span>
+                  ) : (
+                    <SelectValue />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button onClick={copy}>
