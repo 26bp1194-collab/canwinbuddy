@@ -26,9 +26,18 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
   component: ExportPage,
 });
 
+const LANGUAGES = [
+  "English", "Spanish", "French", "German", "Italian", "Portuguese",
+  "Dutch", "Polish", "Russian", "Ukrainian", "Turkish", "Arabic",
+  "Hindi", "Chinese (Simplified)", "Chinese (Traditional)", "Japanese", "Korean", "Vietnamese",
+];
+
 function ExportPage() {
   const { id } = Route.useParams();
   const [platform, setPlatform] = useState<Platform>("blooket");
+  const [language, setLanguage] = useState<string>("English");
+  const [translated, setTranslated] = useState<Record<string, Question[]>>({});
+  const [translating, setTranslating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [playing, setPlaying] = useState(false);
 
@@ -41,8 +50,25 @@ function ExportPage() {
     },
   });
 
-  const questions = (data?.questions as unknown as Question[]) ?? [];
+  const original = (data?.questions as unknown as Question[]) ?? [];
+  const questions = language === "English" ? original : (translated[language] ?? original);
   const text = useMemo(() => formatFor(platform, questions), [platform, questions]);
+
+  const changeLanguage = async (lang: string) => {
+    setLanguage(lang);
+    if (lang === "English" || translated[lang] || original.length === 0) return;
+    setTranslating(true);
+    try {
+      const { questions: out } = await translateQuestions({ data: { questions: original, language: lang } });
+      setTranslated((prev) => ({ ...prev, [lang]: out }));
+      toast.success(`Translated to ${lang}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Translation failed");
+      setLanguage("English");
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
