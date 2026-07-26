@@ -341,12 +341,14 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
   const t = useT();
   const steps: Array<{ id: Stage; label: string }> = [
     { id: "extracting", label: "Extracting source content" },
+    { id: "analyzing", label: "Analyzing notes" },
     { id: "generating", label: "Generating questions" },
-    { id: "validating", label: "Validating against source" },
+    { id: "reviewing", label: "AI reviewing questions" },
     { id: "saving", label: "Saving your set" },
     { id: "done", label: "Complete" },
   ];
-  const order: Stage[] = ["input", "extracting", "generating", "validating", "saving", "done"];
+  const order: Stage[] = ["input", "extracting", "analyzing", "generating", "reviewing", "saving", "done"];
+
   const idx = order.indexOf(stage);
 
   return (
