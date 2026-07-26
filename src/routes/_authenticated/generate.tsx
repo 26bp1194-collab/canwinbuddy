@@ -4,17 +4,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateQuestions, aiTextHelper, type Question } from "@/lib/ai.functions";
+import { generateQuestions } from "@/lib/ai.functions";
 import { parseFile } from "@/lib/file-parse";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 
+import { AiTextHelper } from "@/components/ai-text-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
 
 export const Route = createFileRoute("/_authenticated/generate")({
   head: () => ({
