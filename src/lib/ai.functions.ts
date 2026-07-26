@@ -208,15 +208,35 @@ const PlanInput = z.object({
   existingText: z.string().max(40000).optional().default(""),
 });
 
+const PlanQuestionsSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        options: z.array(z.string()).min(2).max(5),
+      }),
+    )
+    .min(1)
+    .max(4),
+});
+
+const FALLBACK_PLAN = {
+  questions: [
+    { question: "How long should the text be?", options: ["Short (~150 words)", "Medium (~400 words)", "Long (~800 words)"] },
+    { question: "What reading level should it use?", options: ["Simple and beginner-friendly", "Standard school level", "Advanced and technical"] },
+    { question: "What should it focus on?", options: ["Key facts and definitions", "Dates, names and numbers", "Causes, effects and relationships"] },
+  ],
+};
+
 export const planTextQuestions = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => PlanInput.parse(raw))
   .handler(async ({ data }) => {
     const { mode, instruction, existingText } = data;
-    const system = `You help plan a piece of study text before writing it. Ask short clarifying questions so the result matches the user's style and needs.
-- Return ONLY valid JSON: {"questions":[{"question":string,"placeholder":string}]}
-- Ask 3 or 4 questions maximum, each one short sentence.
-- Cover things like: length/detail level, tone & reading level, focus or subtopics, and format preferences.
-- "placeholder" is a short example answer.`;
+    const system = `You help plan a piece of study text before writing it. Ask short multiple-choice questions so the result matches the user's style and needs.
+- Return ONLY valid JSON: {"questions":[{"question":string,"options":[string,string,string]}]}
+- Ask 3 questions maximum, each one short sentence.
+- Each question MUST have 3 or 4 short, concrete selectable options (a few words each). Never ask for free text.
+- Cover things like: length/detail level, tone & reading level, and focus or subtopics.`;
     const user = `Mode: ${mode}\nUser description: ${instruction}${
       existingText.trim() ? `\nExisting text (first 600 chars): """${existingText.slice(0, 600)}"""` : ""
     }`;
@@ -225,21 +245,13 @@ export const planTextQuestions = createServerFn({ method: "POST" })
       { role: "system", content: system },
       { role: "user", content: user },
     ]);
-    const Schema = z.object({
-      questions: z.array(z.object({ question: z.string(), placeholder: z.string().optional().default("") })).min(1).max(4),
-    });
     try {
-      return Schema.parse(JSON.parse(raw));
+      return PlanQuestionsSchema.parse(JSON.parse(raw));
     } catch {
-      return {
-        questions: [
-          { question: "How long and detailed should the text be?", placeholder: "About 400 words, fairly detailed" },
-          { question: "What tone and reading level should it use?", placeholder: "Clear and simple, for Year 9 students" },
-          { question: "Which parts or subtopics should it focus on?", placeholder: "Causes and key dates" },
-        ],
-      };
+      return FALLBACK_PLAN;
     }
   });
+
 
 /* ---------------- Translation ---------------- */
 
