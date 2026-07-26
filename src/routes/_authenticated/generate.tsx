@@ -154,15 +154,25 @@ function GeneratePage() {
         .then((r) => setFacts(r.facts))
         .catch(() => setFacts([]));
 
+      setStage("analyzing");
+      const t0a = performance.now();
+      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty } });
+      mark("Analyzing notes", t0a);
+
       setStage("generating");
       const t1 = performance.now();
-      const { questions } = await generateQuestions({ data: { sourceText: combined, count, difficulty } });
+      const generated = await generateQuestions({
+        data: { sourceText: combined, count, difficulty, analysis },
+      });
       mark("Generating questions", t1);
 
-      setStage("validating");
+      setStage("reviewing");
       const t2 = performance.now();
-      await new Promise((r) => setTimeout(r, 400));
-      mark("Validating against source", t2);
+      const { questions } = await reviewAndRepair({
+        data: { sourceText: combined, questions: generated.questions, difficulty, requested: count, analysis },
+      });
+      mark("AI reviewing questions", t2);
+
 
       setStage("saving");
       const t3 = performance.now();
