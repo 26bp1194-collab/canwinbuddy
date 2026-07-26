@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Lightbulb, Clock } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateQuestions, funFacts } from "@/lib/ai.functions";
+import { analyzeSource, generateQuestions, reviewAndRepair, funFacts } from "@/lib/ai.functions";
 import { parseFile } from "@/lib/file-parse";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated/generate")({
   component: GeneratePage,
 });
 
-type Stage = "input" | "extracting" | "generating" | "validating" | "saving" | "done";
+type Stage = "input" | "extracting" | "analyzing" | "generating" | "reviewing" | "saving" | "done";
 const SUGGESTION_KEY = "cwb:next-quiz";
 
 function GeneratePage() {
@@ -154,15 +154,25 @@ function GeneratePage() {
         .then((r) => setFacts(r.facts))
         .catch(() => setFacts([]));
 
+      setStage("analyzing");
+      const t0a = performance.now();
+      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty } });
+      mark("Analyzing notes", t0a);
+
       setStage("generating");
       const t1 = performance.now();
-      const { questions } = await generateQuestions({ data: { sourceText: combined, count, difficulty } });
+      const generated = await generateQuestions({
+        data: { sourceText: combined, count, difficulty, analysis },
+      });
       mark("Generating questions", t1);
 
-      setStage("validating");
+      setStage("reviewing");
       const t2 = performance.now();
-      await new Promise((r) => setTimeout(r, 400));
-      mark("Validating against source", t2);
+      const { questions } = await reviewAndRepair({
+        data: { sourceText: combined, questions: generated.questions, difficulty, requested: count, analysis },
+      });
+      mark("AI reviewing questions", t2);
+
 
       setStage("saving");
       const t3 = performance.now();
@@ -331,12 +341,14 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
   const t = useT();
   const steps: Array<{ id: Stage; label: string }> = [
     { id: "extracting", label: "Extracting source content" },
+    { id: "analyzing", label: "Analyzing notes" },
     { id: "generating", label: "Generating questions" },
-    { id: "validating", label: "Validating against source" },
+    { id: "reviewing", label: "AI reviewing questions" },
     { id: "saving", label: "Saving your set" },
     { id: "done", label: "Complete" },
   ];
-  const order: Stage[] = ["input", "extracting", "generating", "validating", "saving", "done"];
+  const order: Stage[] = ["input", "extracting", "analyzing", "generating", "reviewing", "saving", "done"];
+
   const idx = order.indexOf(stage);
 
   return (

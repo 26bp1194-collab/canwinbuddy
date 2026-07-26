@@ -65,24 +65,101 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
 
 const BATCH = 15;
 
-export const generateQuestions = createServerFn({ method: "POST" })
+/* ---------------- 1. Analyze ---------------- */
+
+const AnalyzeInput = z.object({
+  sourceText: z.string().min(20),
+  count: z.number().int().min(1).max(100).optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+});
+
+const AnalysisSchema = z.object({
+  topics: z.array(z.string()).min(1),
+  keyFacts: z.array(z.string()),
+  coverageNotes: z.string(),
+});
+
+export type Analysis = z.infer<typeof AnalysisSchema>;
+
+export const analyzeSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((raw: unknown) => InputSchema.parse(raw))
+  .inputValidator((raw: unknown) => AnalyzeInput.parse(raw))
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty } = data;
-    const sourceNorm = normalize(sourceText);
-
-    const systemPrompt = `You generate multiple-choice quiz questions from provided source material. Rules:
-- Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
-- Each "sourceQuote" MUST be a verbatim substring copied directly from the source (10-30 words) that supports the answer.
-- Do not paraphrase the sourceQuote; copy exact text from the source.
-- Exactly 4 choices, only one correct.
-- Difficulty: ${difficulty}. Keep questions self-contained (no "in the passage" phrasing).
+    const system = `You analyse study notes so quiz questions can be written from them later.
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"coverageNotes":string}
+- "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
+- "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
+- "coverageNotes": 1-2 sentences on how dense/testable the material is.
+- Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}`;
+    const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
+    const raw = await callAI([
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ]);
+    try {
+      const parsed = AnalysisSchema.parse(JSON.parse(raw));
+      return {
+        topics: parsed.topics.slice(0, 12),
+        keyFacts: parsed.keyFacts.slice(0, 20),
+        coverageNotes: parsed.coverageNotes,
+      } satisfies Analysis;
+    } catch {
+      return { topics: [], keyFacts: [], coverageNotes: "" } as Analysis;
+    }
+  });
+
+/* ---------------- 2. Generate ---------------- */
+
+function genSystemPrompt(difficulty: string, analysis?: Analysis | null) {
+  const topics = analysis?.topics?.length
+    ? `\n\nANALYSED TOPICS (spread questions evenly across these):\n${analysis.topics.map((t) => `- ${t}`).join("\n")}`
+    : "";
+  const facts = analysis?.keyFacts?.length
+    ? `\n\nKEY FACTS FROM THE NOTES:\n${analysis.keyFacts.map((f) => `- ${f}`).join("\n")}`
+    : "";
+  return `You generate multiple-choice quiz questions from provided source material. Rules:
+- Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
+- Each "sourceQuote" MUST be a verbatim substring copied directly from the source (10-30 words) that supports the correct answer. Never paraphrase it.
+- Exactly 4 choices, only one correct.
+- Use ONLY the source material. Never use outside knowledge as quiz facts.
+
+DIFFICULTY (${difficulty}):
+- easy = direct recall of a clearly stated fact or definition
+- medium = simple application, comparison, or restating an idea in new words
+- hard = inference, multi-step reasoning, cause/effect, or applying ideas to a new situation still supported by the notes
+
+DISTRACTORS:
+- All 4 choices must have similar length and parallel grammar.
+- Wrong answers must be plausible common confusions drawn from the same notes. Never joke, absurd, empty, or obviously wrong options.
+- Exactly one option is defensibly correct.
+
+COVERAGE:
+- Spread questions across the analysed topics and the whole source; do not cluster on the opening paragraphs.
+
+STYLE:
+- Self-contained stems: never write "according to the passage/notes/text".
+- Vary correctIndex across 0,1,2,3 — do not bias toward 0 or 1.
+- Do not repeat or lightly rephrase questions already accepted.
+${MATH_RULES}${topics}${facts}`;
+}
+
+const GenerateInput = InputSchema.extend({
+  analysis: AnalysisSchema.partial().optional(),
+});
+
+export const generateQuestions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => GenerateInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { sourceText, count, difficulty } = data;
+    const analysis = (data.analysis ?? null) as Analysis | null;
+    const sourceNorm = normalize(sourceText);
+    const systemPrompt = genSystemPrompt(difficulty, analysis);
 
     const validated: Question[] = [];
     const seen = new Set<string>();
-    // Enough attempts to fill large sets (up to 100) in batches.
     const maxAttempts = Math.min(20, Math.ceil(count / BATCH) * 3 + 3);
     let attempts = 0;
 
@@ -91,6 +168,8 @@ ${MATH_RULES}`;
       const need = Math.min(count - validated.length, BATCH);
       const avoid = validated.slice(-25).map((q) => q.question);
       const userPrompt = `Generate ${need} quiz questions from this source. Return valid JSON only.${
+        analysis?.topics?.length ? `\n\nAllocate the ${need} questions across the analysed topics as evenly as possible.` : ""
+      }${
         avoid.length ? `\n\nDo NOT repeat or rephrase any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
       const raw = await callAI([
@@ -126,6 +205,166 @@ ${MATH_RULES}`;
 
     return { questions: validated, requested: count };
   });
+
+/* ---------------- 3. AI review + 4. targeted regeneration ---------------- */
+
+const ReviewSchema = z.object({
+  reviews: z.array(
+    z.object({
+      index: z.number().int().min(0),
+      pass: z.boolean(),
+      issues: z.array(z.string()).default([]),
+    }),
+  ),
+});
+
+const REVIEW_SYSTEM = (difficulty: string) => `You are a strict quiz quality reviewer.
+- Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
+- Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
+Check each question for:
+1. Is the marked correct choice actually supported by its sourceQuote and the surrounding notes?
+2. Are all distractors plausible and non-joke, similar in length and grammar, with only one correct answer?
+3. Does the difficulty roughly match "${difficulty}"?
+4. Is the stem self-contained and unambiguous (no "according to the passage")?
+5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
+Each issue is one short, actionable sentence.`;
+
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string) {
+  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
+    questions.map((q, index) => ({ index, ...q })),
+  )}`;
+  const raw = await callAI([
+    { role: "system", content: REVIEW_SYSTEM(difficulty) },
+    { role: "user", content: user },
+  ]);
+  try {
+    const parsed = ReviewSchema.parse(JSON.parse(raw));
+    return parsed.reviews;
+  } catch {
+    // Reviewer failed — do not throw away valid work.
+    return questions.map((_, index) => ({ index, pass: true, issues: [] as string[] }));
+  }
+}
+
+async function regenerateOne(
+  sourceText: string,
+  difficulty: string,
+  analysis: Analysis | null,
+  failed: Question,
+  issues: string[],
+  accepted: Question[],
+): Promise<Question | null> {
+  const user = `Write ONE replacement quiz question.
+
+The following question FAILED review:
+${JSON.stringify(failed)}
+
+Reviewer issues to fix:
+${issues.map((i) => `- ${i}`).join("\n") || "- low quality"}
+
+Fix these issues. Keep the same topic if the source supports it.${
+    analysis?.topics?.length ? `\nRelevant topics: ${analysis.topics.slice(0, 12).join(", ")}` : ""
+  }
+
+Do NOT duplicate any of these already-accepted questions:
+${accepted.slice(-30).map((q) => `- ${q.question}`).join("\n") || "(none)"}
+
+Return JSON with exactly one item: {"questions":[{...}]}
+
+SOURCE:
+"""${sourceText}"""`;
+  const raw = await callAI([
+    { role: "system", content: genSystemPrompt(difficulty, analysis) },
+    { role: "user", content: user },
+  ]);
+  try {
+    const parsed = JSON.parse(raw);
+    const p = QuestionSchema.safeParse(parsed.questions?.[0]);
+    return p.success ? p.data : null;
+  } catch {
+    return null;
+  }
+}
+
+const ReviewInput = z.object({
+  sourceText: z.string().min(20),
+  questions: z.array(QuestionSchema).min(1),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  requested: z.number().int().min(1).max(100),
+  analysis: AnalysisSchema.partial().optional(),
+});
+
+const MAX_ATTEMPTS_PER_ITEM = 2;
+const GLOBAL_REGEN_CAP = 12;
+
+export const reviewAndRepair = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => ReviewInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { sourceText, questions, difficulty, requested } = data;
+    const analysis = (data.analysis ?? null) as Analysis | null;
+    const sourceNorm = normalize(sourceText);
+
+    const reviews = await reviewBatch(sourceText, questions, difficulty);
+    const verdict = new Map(reviews.map((r) => [r.index, r]));
+
+    const accepted: Question[] = [];
+    const failures: Array<{ q: Question; issues: string[] }> = [];
+    questions.forEach((q, i) => {
+      const r = verdict.get(i);
+      if (r && !r.pass) failures.push({ q, issues: r.issues });
+      else accepted.push(q);
+    });
+
+    let regenerated = 0;
+    let budget = GLOBAL_REGEN_CAP;
+
+    for (const failure of failures) {
+      let issues = failure.issues;
+      let current = failure.q;
+      let fixed = false;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_ITEM && budget > 0; attempt++) {
+        budget--;
+        const replacement = await regenerateOne(sourceText, difficulty, analysis, current, issues, accepted);
+        if (!replacement) continue;
+        if (!validateQuestion(replacement, sourceNorm)) {
+          current = replacement;
+          issues = ["The sourceQuote was not a verbatim substring of the notes. Copy exact text from the source."];
+          continue;
+        }
+        if (accepted.some((a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim())) {
+          current = replacement;
+          issues = ["Duplicate of an already-accepted question. Cover a different topic."];
+          continue;
+        }
+        const [check] = await reviewBatch(sourceText, [replacement], difficulty);
+        if (check && !check.pass) {
+          current = replacement;
+          issues = check.issues;
+          continue;
+        }
+        accepted.push(replacement);
+        regenerated++;
+        fixed = true;
+        break;
+      }
+      // If still failing after the caps, drop it rather than saving a bad question.
+      if (!fixed) continue;
+    }
+
+    if (accepted.length === 0) {
+      throw new Error("Couldn't produce questions that passed review. Try adding more detailed source content.");
+    }
+
+    return {
+      questions: accepted.slice(0, requested),
+      requested,
+      reviewed: questions.length,
+      regenerated,
+      dropped: failures.length - regenerated,
+    };
+  });
+
 
 /* ---------------- AI Text Helper ---------------- */
 
