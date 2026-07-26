@@ -45,37 +45,13 @@ function GeneratePage() {
   const [stage, setStage] = useState<Stage>("input");
   const fileInput = useRef<HTMLInputElement>(null);
   const [helperOpen, setHelperOpen] = useState(false);
-  const [helperInstruction, setHelperInstruction] = useState("");
-  const [helperResult, setHelperResult] = useState("");
-  const [helperLoading, setHelperLoading] = useState(false);
 
-  const runHelper = async () => {
-    if (!helperInstruction.trim()) {
-      toast.error("Add an instruction for the AI first.");
-      return;
-    }
-    setHelperLoading(true);
-    try {
-      const { text } = await aiTextHelper({ data: { instruction: helperInstruction.trim(), existingText: helperResult || source } });
-      setHelperResult(text);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Text helper failed");
-    } finally {
-      setHelperLoading(false);
-    }
-  };
-
-  const openHelper = () => {
-    setHelperResult("");
-    setHelperInstruction("");
-    setHelperOpen(true);
-  };
-
-  const useHelperText = () => {
-    setSource(helperResult);
+  const useHelperText = (text: string) => {
+    setSource(text);
     setHelperOpen(false);
     toast.success("Text applied to source");
   };
+
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
