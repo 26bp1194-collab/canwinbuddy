@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Lightbulb, Clock } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateQuestions, funFacts } from "@/lib/ai.functions";
+import { analyzeSource, generateQuestions, reviewAndRepair, funFacts } from "@/lib/ai.functions";
 import { parseFile } from "@/lib/file-parse";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
