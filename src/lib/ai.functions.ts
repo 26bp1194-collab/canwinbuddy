@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const QuestionSchema = z.object({
   question: z.string(),
@@ -65,6 +66,7 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
 const BATCH = 15;
 
 export const generateQuestions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => InputSchema.parse(raw))
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty } = data;
@@ -152,6 +154,7 @@ function planBlock(planAnswers?: Array<{ question: string; answer: string }>) {
 }
 
 export const aiTextHelper = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => TextHelperInput.parse(raw))
   .handler(async ({ data }) => {
     const { mode, instruction, existingText, actions, planAnswers } = data;
@@ -229,6 +232,7 @@ const FALLBACK_PLAN = {
 };
 
 export const planTextQuestions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => PlanInput.parse(raw))
   .handler(async ({ data }) => {
     const { mode, instruction, existingText } = data;
@@ -261,6 +265,7 @@ const TranslateInput = z.object({
 });
 
 export const translateQuestions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => TranslateInput.parse(raw))
   .handler(async ({ data }) => {
     const { questions, language } = data;
@@ -291,6 +296,7 @@ const FunFactsInput = z.object({
 });
 
 export const funFacts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => FunFactsInput.parse(raw))
   .handler(async ({ data }) => {
     const system = `You produce short, surprising, true fun facts related to a study topic, to entertain someone while they wait.
@@ -319,6 +325,7 @@ const ExplainInput = z.object({
 });
 
 export const explainAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => ExplainInput.parse(raw))
   .handler(async ({ data }) => {
     const { question: q, userQuestion, sourceText } = data;
@@ -347,6 +354,7 @@ const FeedbackInput = z.object({
 });
 
 export const quizFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => FeedbackInput.parse(raw))
   .handler(async ({ data }) => {
     const { title, score, total, missed } = data;
@@ -381,6 +389,7 @@ const UiInput = z.object({
 });
 
 export const translateUi = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => UiInput.parse(raw))
   .handler(async ({ data }) => {
     const { strings, language } = data;
