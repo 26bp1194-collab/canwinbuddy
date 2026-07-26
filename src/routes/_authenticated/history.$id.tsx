@@ -11,6 +11,7 @@ import { toStrippedClipboard, downloadForPlatform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/history/$id")({
 });
 
 function HistoryDetail() {
+  const t = useT();
   const { id } = Route.useParams();
   const [playing, setPlaying] = useState(false);
 
@@ -45,8 +47,8 @@ function HistoryDetail() {
     },
   });
 
-  if (isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
-  if (!data) return <div className="p-10">Not found. <Link to="/history" className="text-primary underline">Back to history</Link></div>;
+  if (isLoading) return <div className="p-10 text-muted-foreground">{t("Loading…")}</div>;
+  if (!data) return <div className="p-10">{t("Not found.")} <Link to="/history" className="text-primary underline">{t("Back to history")}</Link></div>;
 
   const questions = data.questions as unknown as Question[];
 
@@ -58,24 +60,24 @@ function HistoryDetail() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <Link to="/history" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to history
+        <ArrowLeft className="h-4 w-4" /> {t("Back to history")}
       </Link>
 
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{data.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{questions.length} verified questions</p>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{questions.length} {t("verified questions")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setPlaying(true)}>
-            <Play className="mr-2 h-4 w-4" /> Play
+            <Play className="mr-2 h-4 w-4" /> {t("Play")}
           </Button>
           <Button variant="secondary" onClick={copyStripped}>
-            <Copy className="mr-2 h-4 w-4" /> Copy clean
+            <Copy className="mr-2 h-4 w-4" /> {t("Copy clean")}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary"><Download className="mr-2 h-4 w-4" /> Export</Button>
+              <Button variant="secondary"><Download className="mr-2 h-4 w-4" /> {t("Export")}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => { downloadForPlatform("blooket", questions, data.title); toast.success("Blooket CSV downloaded"); }}>
@@ -102,7 +104,7 @@ function HistoryDetail() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.03 }}
-            className="panel p-5"
+            className="panel p-4 sm:p-5"
           >
             <p className="font-medium">
               <span className="mr-2 text-primary">{i + 1}.</span>{q.question}
