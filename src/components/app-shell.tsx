@@ -28,6 +28,16 @@ const nav = [
   { to: "/guide", label: "Guide", icon: BookOpen },
 ] as const;
 
+// Mobile bottom bar order: guide, generate, dashboard, history, settings
+const mobileNav = [
+  { to: "/guide", label: "Guide", icon: BookOpen },
+  { to: "/generate", label: "Generate", icon: Sparkles },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/history", label: "History", icon: History },
+  { to: "/settings", label: "Settings", icon: Settings },
+] as const;
+
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = useRouterState({ select: (r) => r.location.pathname });
