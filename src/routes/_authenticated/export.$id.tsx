@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { translateQuestions, type Question } from "@/lib/ai.functions";
-import { downloadForPlatform, formatFor, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
+import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,6 +54,8 @@ function ExportPage() {
   const original = (data?.questions as unknown as Question[]) ?? [];
   const questions = language === "English" ? original : (translated[language] ?? original);
   const text = useMemo(() => formatFor(platform, questions), [platform, questions]);
+  const rows = useMemo(() => toRows(platform, questions), [platform, questions]);
+
 
   const changeLanguage = async (lang: string) => {
     setLanguage(lang);
@@ -87,10 +89,11 @@ function ExportPage() {
   if (!data) return <div className="p-10">Not found. <Link to="/history" className="text-primary underline">Back to history</Link></div>;
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> New generation
+        <ArrowLeft className="h-4 w-4" /> New quiz
       </Link>
+
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
         <h1 className="text-3xl font-bold tracking-tight">{data.title}</h1>
@@ -152,7 +155,35 @@ function ExportPage() {
         <pre className="mt-4 max-h-[560px] overflow-auto rounded-xl border border-border bg-secondary/40 p-4 text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
 {text}
         </pre>
+
+        <p className="mt-8 text-xs uppercase tracking-wider text-muted-foreground">Preview</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          How your {PLATFORM_LABELS[platform]} rows will land in a spreadsheet.
+        </p>
+        <div className="mt-4 max-h-[560px] overflow-auto rounded-xl border border-border">
+          <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+            <thead className="sticky top-0 bg-secondary">
+              <tr>
+                <th className="border-b border-border px-3 py-2 font-semibold text-muted-foreground">#</th>
+                {PLATFORM_COLUMNS[platform].map((c) => (
+                  <th key={c} className="border-b border-border px-3 py-2 font-semibold">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className={i % 2 ? "bg-secondary/20" : undefined}>
+                  <td className="border-b border-border px-3 py-2 text-muted-foreground tabular-nums">{i + 1}</td>
+                  {r.map((cell, j) => (
+                    <td key={j} className="border-b border-border px-3 py-2 align-top">{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+
 
       <AnimatePresence>
         {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
