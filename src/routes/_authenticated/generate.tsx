@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated/generate")({
   component: GeneratePage,
 });
 
-type Stage = "input" | "extracting" | "generating" | "validating" | "saving" | "done";
+type Stage = "input" | "extracting" | "analyzing" | "generating" | "reviewing" | "saving" | "done";
 const SUGGESTION_KEY = "cwb:next-quiz";
 
 function GeneratePage() {
