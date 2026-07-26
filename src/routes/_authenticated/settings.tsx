@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
 import { usePlanningEnabled, useQuizDefaults } from "@/lib/prefs";
-import { APP_LANGUAGES, useI18n } from "@/lib/i18n";
+import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -173,6 +173,7 @@ function SettingsPage() {
 }
 
 function ThemeOption({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+  const t = useT();
   return (
     <button
       onClick={onClick}
@@ -183,12 +184,7 @@ function ThemeOption({ active, onClick, label, icon }: { active: boolean; onClic
     >
       <span className="shrink-0">{icon}</span>
       <span className="truncate">{label}</span>
-      {active && <span className="ml-auto shrink-0 text-xs text-primary">{t0("Active")}</span>}
+      {active && <span className="ml-auto shrink-0 text-xs text-primary">{t("Active")}</span>}
     </button>
   );
-}
-
-// Small helper so the label stays translatable without threading props.
-function t0(s: string) {
-  return s;
 }
