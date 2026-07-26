@@ -104,7 +104,11 @@ function GeneratePage() {
       if (error) throw error;
 
       setStage("done");
-      toast.success(`Generated ${questions.length} verified questions.`);
+      if (questions.length < count) {
+        toast.success(`Generated ${questions.length} of ${count} questions — the source supported this many verified questions.`);
+      } else {
+        toast.success(`Generated ${questions.length} verified questions.`);
+      }
       navigate({ to: "/export/$id", params: { id: inserted.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -113,7 +117,8 @@ function GeneratePage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-4xl font-bold tracking-tight">Generate</h1>
         <p className="mt-2 text-muted-foreground">Paste text or upload a source. AI generates, validates, and saves your set.</p>
