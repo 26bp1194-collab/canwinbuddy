@@ -132,7 +132,7 @@ function GeneratePage() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Label htmlFor="src">Source text</Label>
                   <div className="flex items-center gap-3">
-                    <Button type="button" variant="secondary" size="sm" onClick={openHelper}>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setHelperOpen(true)}>
                       <Wand2 className="mr-2 h-4 w-4" /> AI Text Helper
                     </Button>
                     <span className="text-xs text-muted-foreground tabular-nums">
@@ -194,8 +194,9 @@ function GeneratePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="count" className="mb-2 block">Amount of questions</Label>
-                  <Input id="count" type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} />
-                  <p className="mt-1 text-xs text-muted-foreground">1–30 questions per set.</p>
+                  <Input id="count" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
+                  <p className="mt-1 text-xs text-muted-foreground">1–100 questions per set. Large sets take longer and need plenty of source detail.</p>
+
                 </div>
                 <div>
                   <Label className="mb-2 block">Difficulty</Label>
@@ -222,65 +223,8 @@ function GeneratePage() {
         )}
       </AnimatePresence>
 
-      <Dialog open={helperOpen} onOpenChange={setHelperOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5 text-primary" /> AI Text Helper</DialogTitle>
-            <DialogDescription>
-              Describe what you want. The AI can draft new study text, or improve / rewrite / fact-check what you already have.
-            </DialogDescription>
-          </DialogHeader>
+      <AiTextHelper open={helperOpen} onOpenChange={setHelperOpen} sourceText={source} onApply={useHelperText} />
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="helper-inst" className="mb-2 block">Instruction</Label>
-              <Textarea
-                id="helper-inst"
-                value={helperInstruction}
-                onChange={(e) => setHelperInstruction(e.target.value)}
-                placeholder="e.g. Write a 300-word overview of photosynthesis, or: improve clarity and add key dates."
-                className="min-h-[100px]"
-              />
-              {!helperResult && source.trim() && (
-                <p className="mt-1 text-xs text-muted-foreground">Your current source text will be used as the starting point.</p>
-              )}
-            </div>
-
-            {helperResult && (
-              <div>
-                <Label className="mb-2 block">AI output</Label>
-                <Textarea
-                  value={helperResult}
-                  onChange={(e) => setHelperResult(e.target.value)}
-                  className="min-h-[200px]"
-                />
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button variant="ghost" onClick={() => setHelperOpen(false)}>Cancel</Button>
-            <div className="flex gap-2">
-              {helperResult && (
-                <Button variant="secondary" onClick={runHelper} disabled={helperLoading}>
-                  {helperLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  Change more
-                </Button>
-              )}
-              {!helperResult ? (
-                <Button onClick={runHelper} disabled={helperLoading}>
-                  {helperLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Generate
-                </Button>
-              ) : (
-                <Button onClick={useHelperText} disabled={helperLoading}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Use Text
-                </Button>
-              )}
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
