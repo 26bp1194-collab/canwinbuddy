@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth-context";
+import { useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -43,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const { theme, toggle } = useTheme();
   const { username } = useAuth();
+  const t = useT();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -91,7 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!collapsed && <span className="truncate">{t(item.label)}</span>}
               </Link>
             );
           })}
@@ -107,7 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {!collapsed && <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>}
+            {!collapsed && <span>{theme === "dark" ? t("Light mode") : t("Dark mode")}</span>}
           </button>
           <Button
             variant="ghost"
@@ -115,7 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={cn("w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground", collapsed && "justify-center")}
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && "Log out"}
+            {!collapsed && t("Log out")}
           </Button>
         </div>
       </motion.aside>
@@ -136,8 +138,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               key={item.to}
               to={item.to}
-              aria-label={item.label}
-              title={item.label}
+              aria-label={t(item.label)}
+              title={t(item.label)}
               className={cn(
                 "flex h-14 items-center justify-center transition-colors",
                 active ? "text-primary" : "text-sidebar-foreground/60",
