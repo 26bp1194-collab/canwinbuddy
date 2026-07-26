@@ -164,3 +164,26 @@
 @utility glow-ring {
   box-shadow: var(--shadow-glow);
 }
+
+/* Themed scrollbars so scroll UI matches the palette */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--primary) 55%, transparent) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track {
+    background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--primary) 55%, var(--muted));
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--primary);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-corner { background: transparent; }
+}
