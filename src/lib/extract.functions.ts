@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // Extract text from a base64-encoded image / PDF using Lovable AI vision.
 const InputSchema = z.object({
@@ -12,6 +13,7 @@ const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
 export const extractFromFile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => InputSchema.parse(raw))
   .handler(async ({ data }) => {
     const key = process.env.LOVABLE_API_KEY;
