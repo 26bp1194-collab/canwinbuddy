@@ -42,7 +42,7 @@ function Dashboard() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl px-8 py-10">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
         <p className="text-sm text-muted-foreground">Welcome back, @{username}</p>
         <h1 className="mt-1 text-4xl font-bold tracking-tight">Your Quiz Dashboard</h1>
