@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,8 @@ function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
 
   useEffect(() => {
     if (!loading && session) navigate({ to: "/dashboard", replace: true });
@@ -128,7 +130,7 @@ function AuthPage() {
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="signin">Sign in</TabsTrigger>
+            <TabsTrigger value="signin">Log in</TabsTrigger>
             <TabsTrigger value="signup">Sign up</TabsTrigger>
           </TabsList>
           {(["signin", "signup"] as const).map((t) => (
@@ -144,7 +146,25 @@ function AuthPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="p">Password</Label>
-                <Input id="p" type="password" autoComplete={t === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <div className="relative">
+                  <Input
+                    id="p"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={t === "signup" ? "new-password" : "current-password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <Button
                 onClick={t === "signup" ? signUp : signIn}
@@ -152,11 +172,12 @@ function AuthPage() {
                 className="w-full"
                 size="lg"
               >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t === "signup" ? "Create account" : "Sign in"}
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t === "signup" ? "Create account" : "Log in"}
               </Button>
             </TabsContent>
           ))}
         </Tabs>
+
       </motion.div>
     </div>
   );

@@ -28,6 +28,16 @@ const nav = [
   { to: "/guide", label: "Guide", icon: BookOpen },
 ] as const;
 
+// Mobile bottom bar order: guide, generate, dashboard, history, settings
+const mobileNav = [
+  { to: "/guide", label: "Guide", icon: BookOpen },
+  { to: "/generate", label: "Generate", icon: Sparkles },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/history", label: "History", icon: History },
+  { to: "/settings", label: "Settings", icon: Settings },
+] as const;
+
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = useRouterState({ select: (r) => r.location.pathname });
@@ -45,8 +55,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <motion.aside
         animate={{ width: collapsed ? 72 : 248 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
-        className="sticky top-0 flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
+        className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex"
       >
+
         <div className={cn("flex items-center gap-3 px-4 py-5", collapsed && "justify-center px-2")}>
           <button
             onClick={() => setCollapsed((c) => !c)}
@@ -104,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={cn("w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground", collapsed && "justify-center")}
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && "Sign out"}
+            {!collapsed && "Log out"}
           </Button>
         </div>
       </motion.aside>
@@ -112,6 +123,39 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="flex-1 min-w-0">
         {children}
       </main>
+
+      {/* Mobile bottom navigation */}
+      <nav
+        aria-label="Main navigation"
+        className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-sidebar-border bg-sidebar/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        {mobileNav.map((item) => {
+          const active = pathname === item.to || pathname.startsWith(item.to + "/");
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              aria-label={item.label}
+              title={item.label}
+              className={cn(
+                "flex h-14 items-center justify-center transition-colors",
+                active ? "text-primary" : "text-sidebar-foreground/60",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
+                  active && "bg-primary text-primary-foreground",
+                )}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
+
 }

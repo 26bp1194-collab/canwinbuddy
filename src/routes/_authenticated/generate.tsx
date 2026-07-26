@@ -4,17 +4,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateQuestions, aiTextHelper, type Question } from "@/lib/ai.functions";
+import { generateQuestions } from "@/lib/ai.functions";
 import { parseFile } from "@/lib/file-parse";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 
+import { AiTextHelper } from "@/components/ai-text-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
 
 export const Route = createFileRoute("/_authenticated/generate")({
   head: () => ({
@@ -44,37 +45,13 @@ function GeneratePage() {
   const [stage, setStage] = useState<Stage>("input");
   const fileInput = useRef<HTMLInputElement>(null);
   const [helperOpen, setHelperOpen] = useState(false);
-  const [helperInstruction, setHelperInstruction] = useState("");
-  const [helperResult, setHelperResult] = useState("");
-  const [helperLoading, setHelperLoading] = useState(false);
 
-  const runHelper = async () => {
-    if (!helperInstruction.trim()) {
-      toast.error("Add an instruction for the AI first.");
-      return;
-    }
-    setHelperLoading(true);
-    try {
-      const { text } = await aiTextHelper({ data: { instruction: helperInstruction.trim(), existingText: helperResult || source } });
-      setHelperResult(text);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Text helper failed");
-    } finally {
-      setHelperLoading(false);
-    }
-  };
-
-  const openHelper = () => {
-    setHelperResult("");
-    setHelperInstruction("");
-    setHelperOpen(true);
-  };
-
-  const useHelperText = () => {
-    setSource(helperResult);
+  const useHelperText = (text: string) => {
+    setSource(text);
     setHelperOpen(false);
     toast.success("Text applied to source");
   };
+
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -127,7 +104,11 @@ function GeneratePage() {
       if (error) throw error;
 
       setStage("done");
-      toast.success(`Generated ${questions.length} verified questions.`);
+      if (questions.length < count) {
+        toast.success(`Generated ${questions.length} of ${count} questions — the source supported this many verified questions.`);
+      } else {
+        toast.success(`Generated ${questions.length} verified questions.`);
+      }
       navigate({ to: "/export/$id", params: { id: inserted.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -136,7 +117,8 @@ function GeneratePage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-4xl font-bold tracking-tight">Generate</h1>
         <p className="mt-2 text-muted-foreground">Paste text or upload a source. AI generates, validates, and saves your set.</p>
@@ -155,7 +137,7 @@ function GeneratePage() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Label htmlFor="src">Source text</Label>
                   <div className="flex items-center gap-3">
-                    <Button type="button" variant="secondary" size="sm" onClick={openHelper}>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setHelperOpen(true)}>
                       <Wand2 className="mr-2 h-4 w-4" /> AI Text Helper
                     </Button>
                     <span className="text-xs text-muted-foreground tabular-nums">
@@ -217,8 +199,9 @@ function GeneratePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="count" className="mb-2 block">Amount of questions</Label>
-                  <Input id="count" type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} />
-                  <p className="mt-1 text-xs text-muted-foreground">1–30 questions per set.</p>
+                  <Input id="count" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
+                  <p className="mt-1 text-xs text-muted-foreground">1–100 questions per set. Large sets take longer and need plenty of source detail.</p>
+
                 </div>
                 <div>
                   <Label className="mb-2 block">Difficulty</Label>
@@ -245,65 +228,8 @@ function GeneratePage() {
         )}
       </AnimatePresence>
 
-      <Dialog open={helperOpen} onOpenChange={setHelperOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5 text-primary" /> AI Text Helper</DialogTitle>
-            <DialogDescription>
-              Describe what you want. The AI can draft new study text, or improve / rewrite / fact-check what you already have.
-            </DialogDescription>
-          </DialogHeader>
+      <AiTextHelper open={helperOpen} onOpenChange={setHelperOpen} sourceText={source} onApply={useHelperText} />
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="helper-inst" className="mb-2 block">Instruction</Label>
-              <Textarea
-                id="helper-inst"
-                value={helperInstruction}
-                onChange={(e) => setHelperInstruction(e.target.value)}
-                placeholder="e.g. Write a 300-word overview of photosynthesis, or: improve clarity and add key dates."
-                className="min-h-[100px]"
-              />
-              {!helperResult && source.trim() && (
-                <p className="mt-1 text-xs text-muted-foreground">Your current source text will be used as the starting point.</p>
-              )}
-            </div>
-
-            {helperResult && (
-              <div>
-                <Label className="mb-2 block">AI output</Label>
-                <Textarea
-                  value={helperResult}
-                  onChange={(e) => setHelperResult(e.target.value)}
-                  className="min-h-[200px]"
-                />
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button variant="ghost" onClick={() => setHelperOpen(false)}>Cancel</Button>
-            <div className="flex gap-2">
-              {helperResult && (
-                <Button variant="secondary" onClick={runHelper} disabled={helperLoading}>
-                  {helperLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  Change more
-                </Button>
-              )}
-              {!helperResult ? (
-                <Button onClick={runHelper} disabled={helperLoading}>
-                  {helperLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Generate
-                </Button>
-              ) : (
-                <Button onClick={useHelperText} disabled={helperLoading}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Use Text
-                </Button>
-              )}
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
