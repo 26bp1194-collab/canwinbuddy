@@ -27,10 +27,11 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
 });
 
 const LANGUAGES = [
-  "English", "Spanish", "French", "German", "Italian", "Portuguese",
-  "Dutch", "Polish", "Russian", "Ukrainian", "Turkish", "Arabic",
-  "Hindi", "Chinese (Simplified)", "Chinese (Traditional)", "Japanese", "Korean", "Vietnamese",
-];
+  "Arabic", "Chinese (Simplified)", "Chinese (Traditional)", "Dutch", "English", "French",
+  "German", "Hindi", "Italian", "Japanese", "Korean", "Polish",
+  "Portuguese", "Russian", "Spanish", "Turkish", "Ukrainian", "Vietnamese",
+].sort((a, b) => a.localeCompare(b));
+
 
 function ExportPage() {
   const { id } = Route.useParams();
