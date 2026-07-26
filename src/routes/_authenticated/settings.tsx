@@ -29,16 +29,17 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { user, username } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { planningEnabled, setPlanningEnabled } = usePlanningEnabled();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    toast.success("Signed out");
+    toast.success("Logged out");
     navigate({ to: "/auth" });
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-4xl font-bold tracking-tight">Settings</h1>
         <p className="mt-2 text-muted-foreground">Manage your account and appearance.</p>
@@ -48,18 +49,33 @@ function SettingsPage() {
         <section className="panel p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold"><User className="h-4 w-4 text-primary" /> Account</h2>
           <div className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between border-b border-border pb-3">
+            <div className="flex justify-between gap-3 border-b border-border pb-3">
               <span className="text-muted-foreground">Username</span>
-              <span className="font-medium">{username ?? "—"}</span>
+              <span className="truncate font-medium">{username ?? "—"}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">User ID</span>
-              <span className="font-mono text-xs text-muted-foreground">{user?.id.slice(0, 12)}…</span>
+              <span className="truncate font-mono text-xs text-muted-foreground">{user?.id.slice(0, 12)}…</span>
             </div>
           </div>
           <Button variant="secondary" onClick={handleSignOut} className="mt-5">
-            <LogOut className="mr-2 h-4 w-4" /> Sign out
+            <LogOut className="mr-2 h-4 w-4" /> Log out
           </Button>
+        </section>
+
+        <section className="panel p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <ListChecks className="h-4 w-4 text-primary" /> AI Text Helper
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Planning asks you a few quick questions before writing, so the text matches your style.
+          </p>
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-xl border border-border bg-secondary/40 p-4">
+            <Label htmlFor="planning" className="min-w-0 cursor-pointer text-sm font-medium">
+              Planning questions
+            </Label>
+            <Switch id="planning" checked={planningEnabled} onCheckedChange={setPlanningEnabled} className="shrink-0" />
+          </div>
         </section>
 
         <section className="panel p-6">
@@ -73,6 +89,7 @@ function SettingsPage() {
             <ThemeOption active={theme === "light"} onClick={() => setTheme("light")} label="Light" icon={<Sun className="h-4 w-4" />} />
           </div>
         </section>
+
       </div>
     </div>
   );
