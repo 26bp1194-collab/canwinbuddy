@@ -1,8 +1,10 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, XCircle, Trophy } from "lucide-react";
+import { X, Check, XCircle, Trophy, Loader2, Sparkles, MessageSquare } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 
-import type { Question } from "@/lib/ai.functions";
+import { quizFeedback, type Question } from "@/lib/ai.functions";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
@@ -12,12 +14,19 @@ interface Props {
   title: string;
 }
 
+const SUGGESTION_KEY = "cwb:next-quiz";
+
 export function QuizGame({ questions, onClose, title }: Props) {
+  const t = useT();
+  const navigate = useNavigate();
   const shuffled = useMemo(() => [...questions].sort(() => Math.random() - 0.5), [questions]);
   const [i, setI] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const [missed, setMissed] = useState<Array<{ question: string; correct: string }>>([]);
   const [finished, setFinished] = useState(false);
+  const [coach, setCoach] = useState<{ feedback: string; suggestionTitle: string; suggestionTopic: string } | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
 
   const q = shuffled[i];
   const progress = ((i + (selected !== null ? 1 : 0)) / shuffled.length) * 100;
@@ -26,15 +35,50 @@ export function QuizGame({ questions, onClose, title }: Props) {
     if (selected !== null) return;
     setSelected(idx);
     if (idx === q.correctIndex) setScore((s) => s + 1);
+    else setMissed((m) => [...m, { question: q.question, correct: q.choices[q.correctIndex] }]);
+  };
+
+  const finish = async (finalScore: number, finalMissed: Array<{ question: string; correct: string }>) => {
+    setFinished(true);
+    setCoachLoading(true);
+    try {
+      const res = await quizFeedback({
+        data: { title, score: finalScore, total: shuffled.length, missed: finalMissed },
+      });
+      setCoach(res);
+    } catch {
+      setCoach(null);
+    } finally {
+      setCoachLoading(false);
+    }
   };
 
   const next = () => {
     if (i + 1 >= shuffled.length) {
-      setFinished(true);
+      void finish(score, missed);
     } else {
       setI((n) => n + 1);
       setSelected(null);
     }
+  };
+
+  const acceptSuggestion = () => {
+    if (!coach) return;
+    window.localStorage.setItem(
+      SUGGESTION_KEY,
+      JSON.stringify({ title: coach.suggestionTitle, topic: coach.suggestionTopic }),
+    );
+    onClose();
+    navigate({ to: "/generate" });
+  };
+
+  const replay = () => {
+    setI(0);
+    setScore(0);
+    setMissed([]);
+    setSelected(null);
+    setFinished(false);
+    setCoach(null);
   };
 
   return (
@@ -42,37 +86,67 @@ export function QuizGame({ questions, onClose, title }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/95 p-3 backdrop-blur-sm sm:items-center sm:p-4"
     >
-      <div className="panel w-full max-w-2xl p-8">
-        <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="panel my-auto w-full max-w-2xl p-4 sm:p-8">
+        <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
-            <p className="truncate text-xs uppercase tracking-wider text-muted-foreground">Playing</p>
+            <p className="truncate text-xs uppercase tracking-wider text-muted-foreground">{t("Playing")}</p>
             <p className="truncate font-medium">{title}</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} aria-label={t("Close")} className="shrink-0 text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {finished ? (
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-8 text-center">
-            <Trophy className="mx-auto h-14 w-14 text-primary" />
-            <h2 className="mt-4 font-display text-3xl font-bold">Nice work</h2>
-            <p className="mt-2 text-muted-foreground">You scored</p>
-            <p className="mt-2 font-display text-5xl font-bold text-primary">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-4 text-center sm:py-8">
+            <Trophy className="mx-auto h-12 w-12 text-primary sm:h-14 sm:w-14" />
+            <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">{t("Nice work")}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{t("You scored")}</p>
+            <p className="mt-2 font-display text-4xl font-bold text-primary sm:text-5xl">
               {score} / {shuffled.length}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">{Math.round((score / shuffled.length) * 100)}% correct</p>
-            <div className="mt-6 flex justify-center gap-2">
-              <Button onClick={() => { setI(0); setScore(0); setSelected(null); setFinished(false); }}>Play again</Button>
-              <Button variant="secondary" onClick={onClose}>Close</Button>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {Math.round((score / shuffled.length) * 100)}% {t("correct")}
+            </p>
+
+            <div className="mt-6 rounded-xl border border-border bg-secondary/40 p-4 text-left">
+              <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <MessageSquare className="h-4 w-4 text-primary" /> {t("AI feedback")}
+              </p>
+              {coachLoading ? (
+                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Reviewing your answers…")}
+                </p>
+              ) : coach ? (
+                <>
+                  <p className="mt-2 text-sm leading-relaxed">{coach.feedback}</p>
+                  <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Suggested next quiz")}</p>
+                    <p className="mt-1 text-sm font-medium">{coach.suggestionTitle}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{coach.suggestionTopic}</p>
+                    <Button size="sm" className="mt-3 w-full sm:w-auto" onClick={acceptSuggestion}>
+                      <Sparkles className="mr-2 h-4 w-4" /> {t("Generate this quiz")}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">{t("Feedback unavailable right now.")}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+              <Button onClick={replay}>{t("Play again")}</Button>
+              <Button variant="secondary" onClick={onClose}>{t("Close")}</Button>
             </div>
           </motion.div>
         ) : (
           <>
             <Progress value={progress} className="mb-6 h-1.5" />
-            <p className="text-sm text-muted-foreground">Question {i + 1} of {shuffled.length}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("Question")} {i + 1} {t("of")} {shuffled.length}
+            </p>
             <AnimatePresence mode="wait">
               <motion.div
                 key={i}
@@ -81,7 +155,7 @@ export function QuizGame({ questions, onClose, title }: Props) {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
               >
-                <h2 className="mt-2 text-2xl font-semibold leading-tight">{q.question}</h2>
+                <h2 className="mt-2 text-lg font-semibold leading-tight sm:text-2xl">{q.question}</h2>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {q.choices.map((c, idx) => {
                     const isCorrect = idx === q.correctIndex;
@@ -101,14 +175,14 @@ export function QuizGame({ questions, onClose, title }: Props) {
                         whileHover={selected === null ? { scale: 1.02 } : undefined}
                         whileTap={selected === null ? { scale: 0.98 } : undefined}
                         disabled={selected !== null}
-                        className={`flex items-center gap-3 rounded-xl border p-4 text-left text-sm font-medium transition-colors ${cls}`}
+                        className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-medium transition-colors sm:p-4 ${cls}`}
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background text-xs font-bold">
                           {String.fromCharCode(65 + idx)}
                         </span>
-                        <span className="flex-1">{c}</span>
-                        {revealed && isCorrect && <Check className="h-4 w-4 text-success" />}
-                        {revealed && isSelected && !isCorrect && <XCircle className="h-4 w-4 text-destructive" />}
+                        <span className="min-w-0 flex-1 break-words">{c}</span>
+                        {revealed && isCorrect && <Check className="h-4 w-4 shrink-0 text-success" />}
+                        {revealed && isSelected && !isCorrect && <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
                       </motion.button>
                     );
                   })}
@@ -116,8 +190,8 @@ export function QuizGame({ questions, onClose, title }: Props) {
               </motion.div>
             </AnimatePresence>
             <div className="mt-6 flex justify-end">
-              <Button onClick={next} disabled={selected === null}>
-                {i + 1 >= shuffled.length ? "Finish" : "Next"}
+              <Button onClick={next} disabled={selected === null} className="w-full sm:w-auto">
+                {i + 1 >= shuffled.length ? t("Finish") : t("Next")}
               </Button>
             </div>
           </>

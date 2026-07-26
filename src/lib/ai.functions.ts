@@ -208,15 +208,35 @@ const PlanInput = z.object({
   existingText: z.string().max(40000).optional().default(""),
 });
 
+const PlanQuestionsSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        options: z.array(z.string()).min(2).max(5),
+      }),
+    )
+    .min(1)
+    .max(4),
+});
+
+const FALLBACK_PLAN = {
+  questions: [
+    { question: "How long should the text be?", options: ["Short (~150 words)", "Medium (~400 words)", "Long (~800 words)"] },
+    { question: "What reading level should it use?", options: ["Simple and beginner-friendly", "Standard school level", "Advanced and technical"] },
+    { question: "What should it focus on?", options: ["Key facts and definitions", "Dates, names and numbers", "Causes, effects and relationships"] },
+  ],
+};
+
 export const planTextQuestions = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => PlanInput.parse(raw))
   .handler(async ({ data }) => {
     const { mode, instruction, existingText } = data;
-    const system = `You help plan a piece of study text before writing it. Ask short clarifying questions so the result matches the user's style and needs.
-- Return ONLY valid JSON: {"questions":[{"question":string,"placeholder":string}]}
-- Ask 3 or 4 questions maximum, each one short sentence.
-- Cover things like: length/detail level, tone & reading level, focus or subtopics, and format preferences.
-- "placeholder" is a short example answer.`;
+    const system = `You help plan a piece of study text before writing it. Ask short multiple-choice questions so the result matches the user's style and needs.
+- Return ONLY valid JSON: {"questions":[{"question":string,"options":[string,string,string]}]}
+- Ask 3 questions maximum, each one short sentence.
+- Each question MUST have 3 or 4 short, concrete selectable options (a few words each). Never ask for free text.
+- Cover things like: length/detail level, tone & reading level, and focus or subtopics.`;
     const user = `Mode: ${mode}\nUser description: ${instruction}${
       existingText.trim() ? `\nExisting text (first 600 chars): """${existingText.slice(0, 600)}"""` : ""
     }`;
@@ -225,21 +245,13 @@ export const planTextQuestions = createServerFn({ method: "POST" })
       { role: "system", content: system },
       { role: "user", content: user },
     ]);
-    const Schema = z.object({
-      questions: z.array(z.object({ question: z.string(), placeholder: z.string().optional().default("") })).min(1).max(4),
-    });
     try {
-      return Schema.parse(JSON.parse(raw));
+      return PlanQuestionsSchema.parse(JSON.parse(raw));
     } catch {
-      return {
-        questions: [
-          { question: "How long and detailed should the text be?", placeholder: "About 400 words, fairly detailed" },
-          { question: "What tone and reading level should it use?", placeholder: "Clear and simple, for Year 9 students" },
-          { question: "Which parts or subtopics should it focus on?", placeholder: "Causes and key dates" },
-        ],
-      };
+      return FALLBACK_PLAN;
     }
   });
+
 
 /* ---------------- Translation ---------------- */
 
@@ -270,4 +282,121 @@ export const translateQuestions = createServerFn({ method: "POST" })
       out.push(p.success ? { ...p.data, correctIndex: questions[i].correctIndex } : questions[i]);
     }
     return { questions: out };
+  });
+
+/* ---------------- Fun facts ---------------- */
+
+const FunFactsInput = z.object({
+  topic: z.string().min(10).max(6000),
+});
+
+export const funFacts = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => FunFactsInput.parse(raw))
+  .handler(async ({ data }) => {
+    const system = `You produce short, surprising, true fun facts related to a study topic, to entertain someone while they wait.
+- Return ONLY valid JSON: {"facts":[string]}
+- Give 10 facts. Each fact is one sentence, under 200 characters, self-contained and genuinely interesting.
+- Facts must be real and accurate. No made-up statistics.
+${MATH_RULES}`;
+    const raw = await callAI([
+      { role: "system", content: system },
+      { role: "user", content: `Topic material (may be long, use the main subject):\n"""${data.topic.slice(0, 4000)}"""` },
+    ]);
+    try {
+      const parsed = z.object({ facts: z.array(z.string()).min(1) }).parse(JSON.parse(raw));
+      return { facts: parsed.facts.slice(0, 12) };
+    } catch {
+      return { facts: [] as string[] };
+    }
+  });
+
+/* ---------------- Answer explanation & follow-up ---------------- */
+
+const ExplainInput = z.object({
+  question: QuestionSchema,
+  userQuestion: z.string().max(1000).optional().default(""),
+  sourceText: z.string().max(20000).optional().default(""),
+});
+
+export const explainAnswer = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => ExplainInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { question: q, userQuestion, sourceText } = data;
+    const system = `You are a patient tutor explaining quiz answers.
+- Reply in plain prose, no markdown headers, 2-5 short sentences.
+- Explain clearly WHY the correct answer is correct, and briefly why the tempting wrong options are not.
+${MATH_RULES}`;
+    const user = `QUESTION: ${q.question}
+OPTIONS:
+${q.choices.map((c, i) => `${String.fromCharCode(65 + i)}. ${c}${i === q.correctIndex ? "  <- correct" : ""}`).join("\n")}
+SUPPORTING SOURCE QUOTE: "${q.sourceQuote}"${sourceText ? `\nWIDER SOURCE (excerpt): """${sourceText.slice(0, 4000)}"""` : ""}${
+      userQuestion.trim() ? `\n\nThe learner still doesn't understand and asks: "${userQuestion.trim()}" — answer this specifically.` : ""
+    }`;
+    const text = (await callAI([{ role: "system", content: system }, { role: "user", content: user }], false))?.trim();
+    if (!text) throw new Error("No explanation returned");
+    return { text };
+  });
+
+/* ---------------- Post-quiz feedback ---------------- */
+
+const FeedbackInput = z.object({
+  title: z.string().max(200),
+  score: z.number().int().min(0),
+  total: z.number().int().min(1),
+  missed: z.array(z.object({ question: z.string(), correct: z.string() })).max(30).optional().default([]),
+});
+
+export const quizFeedback = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => FeedbackInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { title, score, total, missed } = data;
+    const system = `You are an encouraging study coach reviewing a finished quiz.
+- Return ONLY valid JSON: {"feedback":string,"suggestionTitle":string,"suggestionTopic":string}
+- "feedback": 2-4 short sentences. Warm, specific, mention what went well and the weak areas from the missed questions.
+- "suggestionTitle": a short title (max 60 chars) for a follow-up quiz that targets the weak areas.
+- "suggestionTopic": a 2-4 sentence description of the material that follow-up quiz should cover, written so it can be used as an information request.
+${MATH_RULES}`;
+    const user = `Quiz: ${title}\nScore: ${score}/${total}\nMissed questions:\n${
+      missed.length ? missed.map((m) => `- ${m.question} (correct: ${m.correct})`).join("\n") : "(none — perfect score)"
+    }`;
+    const raw = await callAI([{ role: "system", content: system }, { role: "user", content: user }]);
+    try {
+      return z
+        .object({ feedback: z.string(), suggestionTitle: z.string(), suggestionTopic: z.string() })
+        .parse(JSON.parse(raw));
+    } catch {
+      return {
+        feedback: `You scored ${score} of ${total}. Review the questions you missed and try again.`,
+        suggestionTitle: `${title} — review round`,
+        suggestionTopic: `Key concepts from "${title}", focusing on the areas that were answered incorrectly.`,
+      };
+    }
+  });
+
+/* ---------------- UI translation ---------------- */
+
+const UiInput = z.object({
+  strings: z.array(z.string()).min(1).max(400),
+  language: z.string().min(1).max(60),
+});
+
+export const translateUi = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => UiInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { strings, language } = data;
+    const system = `You localise user-interface strings to ${language}.
+- Return ONLY valid JSON: {"translations":[string]} with EXACTLY the same number of items, in the same order.
+- Translate naturally and concisely, keeping UI tone and any punctuation/placeholders like {n}, %, · or … intact.
+- NEVER translate the product name "CanWinBuddy", platform names (Blooket, Gimkit, Gimkit 2, Kahoot), file formats, or usernames.`;
+    const raw = await callAI([
+      { role: "system", content: system },
+      { role: "user", content: JSON.stringify({ strings }) },
+    ]);
+    try {
+      const parsed = z.object({ translations: z.array(z.string()) }).parse(JSON.parse(raw));
+      if (parsed.translations.length !== strings.length) throw new Error("length mismatch");
+      return { translations: parsed.translations };
+    } catch {
+      return { translations: strings };
+    }
   });
