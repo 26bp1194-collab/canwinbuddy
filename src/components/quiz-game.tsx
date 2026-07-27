@@ -12,11 +12,12 @@ interface Props {
   questions: Question[];
   onClose: () => void;
   title: string;
+  guest?: boolean;
 }
 
 const SUGGESTION_KEY = "cwb:next-quiz";
 
-export function QuizGame({ questions, onClose, title }: Props) {
+export function QuizGame({ questions, onClose, title, guest = false }: Props) {
   const t = useT();
   const navigate = useNavigate();
   const shuffled = useMemo(() => [...questions].sort(() => Math.random() - 0.5), [questions]);
@@ -40,6 +41,7 @@ export function QuizGame({ questions, onClose, title }: Props) {
 
   const finish = async (finalScore: number, finalMissed: Array<{ question: string; correct: string }>) => {
     setFinished(true);
+    if (guest) return;
     setCoachLoading(true);
     try {
       const res = await quizFeedback({
@@ -52,6 +54,7 @@ export function QuizGame({ questions, onClose, title }: Props) {
       setCoachLoading(false);
     }
   };
+
 
   const next = () => {
     if (i + 1 >= shuffled.length) {

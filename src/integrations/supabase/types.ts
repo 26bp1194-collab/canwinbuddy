@@ -38,6 +38,69 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_group_items: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          quiz_set_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          quiz_set_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          quiz_set_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_group_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_group_items_quiz_set_id_fkey"
+            columns: ["quiz_set_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       quiz_sets: {
         Row: {
           created_at: string
@@ -70,6 +133,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      quiz_shares: {
+        Row: {
+          created_at: string
+          id: string
+          question_count: number
+          questions: Json
+          quiz_set_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_count?: number
+          questions: Json
+          quiz_set_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_count?: number
+          questions?: Json
+          quiz_set_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_shares_quiz_set_id_fkey"
+            columns: ["quiz_set_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

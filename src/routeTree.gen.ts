@@ -13,6 +13,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlayIdRouteImport } from './routes/play.$id'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedGuideRouteImport } from './routes/_authenticated/guide'
@@ -38,6 +39,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayIdRoute = PlayIdRouteImport.update({
+  id: '/play/$id',
+  path: '/play/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/guide': typeof AuthenticatedGuideRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRoute
+  '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/guide': typeof AuthenticatedGuideRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRoute
+  '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/_authenticated/guide': typeof AuthenticatedGuideRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/play/$id': typeof PlayIdRoute
   '/_authenticated/export/$id': typeof AuthenticatedExportIdRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/guide'
     | '/history'
     | '/settings'
+    | '/play/$id'
     | '/export/$id'
     | '/history/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/guide'
     | '/history'
     | '/settings'
+    | '/play/$id'
     | '/export/$id'
     | '/history/$id'
   id:
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/_authenticated/guide'
     | '/_authenticated/history'
     | '/_authenticated/settings'
+    | '/play/$id'
     | '/_authenticated/export/$id'
     | '/_authenticated/history/$id'
   fileRoutesById: FileRoutesById
@@ -159,6 +171,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  PlayIdRoute: typeof PlayIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/play/$id': {
+      id: '/play/$id'
+      path: '/play/$id'
+      fullPath: '/play/$id'
+      preLoaderRoute: typeof PlayIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/settings': {
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  PlayIdRoute: PlayIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

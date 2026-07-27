@@ -134,7 +134,16 @@ function AuthPage() {
             <TabsTrigger value="signup">Sign up</TabsTrigger>
           </TabsList>
           {(["signin", "signup"] as const).map((t) => (
-            <TabsContent key={t} value={t} className="mt-6 space-y-4">
+            <TabsContent key={t} value={t} className="mt-6">
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (busy) return;
+                  if (!username.trim() || !password) return;
+                  void (t === "signup" ? signUp() : signIn());
+                }}
+              >
               <div className="space-y-2">
                 <Label htmlFor="u">Username</Label>
                 <Input id="u" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. quizmaster42" />
@@ -166,15 +175,12 @@ function AuthPage() {
                   </button>
                 </div>
               </div>
-              <Button
-                onClick={t === "signup" ? signUp : signIn}
-                disabled={busy}
-                className="w-full"
-                size="lg"
-              >
+              <Button type="submit" disabled={busy} className="w-full" size="lg">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t === "signup" ? "Create account" : "Log in"}
               </Button>
+              </form>
             </TabsContent>
+
           ))}
         </Tabs>
 
