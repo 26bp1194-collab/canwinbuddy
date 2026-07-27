@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Lightbulb, Clock } from "lucide-react";
+import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap } from "lucide-react";
 import { toast } from "sonner";
 
-import { analyzeSource, generateQuestions, reviewAndRepair, funFacts } from "@/lib/ai.functions";
+import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
 import { parseFile } from "@/lib/file-parse";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   clearDraft,
   formatMs,
@@ -16,8 +17,10 @@ import {
   getQuizDefaults,
   saveDraft,
   saveTimings,
+  DEFAULT_SPEC,
   type Difficulty,
   type StepTiming,
+  type StyleSpec,
 } from "@/lib/prefs";
 
 import { AiTextHelper } from "@/components/ai-text-helper";
@@ -50,14 +53,15 @@ function GeneratePage() {
   const t = useT();
   const [source, setSource] = useState("");
   const [title, setTitle] = useState("");
-  const [count, setCount] = useState(10);
+  const [countText, setCountText] = useState("10");
+  const count = Math.max(1, Math.min(100, Number(countText) || 1));
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [spec, setSpec] = useState<StyleSpec>(DEFAULT_SPEC);
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [timings, setTimings] = useState<StepTiming[]>([]);
   const [totalMs, setTotalMs] = useState(0);
-  const [facts, setFacts] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperSeed, setHelperSeed] = useState("");
@@ -70,11 +74,13 @@ function GeneratePage() {
     if (draft) {
       setSource(draft.source);
       setTitle(draft.title);
-      setCount(draft.count);
+      setCountText(String(draft.count));
       setDifficulty(draft.difficulty);
+      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec) });
     } else {
-      setCount(defaults.count);
+      setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
+      setSpec({ ...DEFAULT_SPEC, ...defaults.spec });
     }
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -97,8 +103,8 @@ function GeneratePage() {
   useEffect(() => {
     if (!restored.current) return;
     if (!source && !title) return;
-    saveDraft({ source, title, count, difficulty });
-  }, [source, title, count, difficulty]);
+    saveDraft({ source, title, count, difficulty, spec });
+  }, [source, title, count, difficulty, spec]);
 
   const useHelperText = (text: string) => {
     setSource(text);
@@ -131,7 +137,6 @@ function GeneratePage() {
       let combined = source.trim();
       setTimings([]);
       setTotalMs(0);
-      setFacts([]);
 
       if (files.length > 0) {
         setStage("extracting");
@@ -149,11 +154,6 @@ function GeneratePage() {
         return;
       }
 
-      // Fun facts run alongside generation purely for entertainment.
-      void funFacts({ data: { topic: combined } })
-        .then((r) => setFacts(r.facts))
-        .catch(() => setFacts([]));
-
       setStage("analyzing");
       const t0a = performance.now();
       const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty } });
@@ -162,17 +162,16 @@ function GeneratePage() {
       setStage("generating");
       const t1 = performance.now();
       const generated = await generateQuestions({
-        data: { sourceText: combined, count, difficulty, analysis },
+        data: { sourceText: combined, count, difficulty, spec, analysis },
       });
       mark("Generating questions", t1);
 
       setStage("reviewing");
       const t2 = performance.now();
       const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, requested: count, analysis },
+        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis },
       });
       mark("AI reviewing questions", t2);
-
 
       setStage("saving");
       const t3 = performance.now();
@@ -294,24 +293,29 @@ function GeneratePage() {
                 )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="count" className="mb-2 block">{t("Amount of questions")}</Label>
-                  <Input id="count" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
-                  <p className="mt-1 text-xs text-muted-foreground">{t("1–100 questions per set. Large sets take longer and need plenty of source detail.")}</p>
-                </div>
-                <div>
-                  <Label className="mb-2 block">{t("Difficulty")}</Label>
-                  <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="easy">{t("Easy")}</SelectItem>
-                      <SelectItem value="medium">{t("Medium")}</SelectItem>
-                      <SelectItem value="hard">{t("Hard")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="count" className="mb-2 block">{t("Amount of questions")}</Label>
+                <Input
+                  id="count"
+                  type="text"
+                  inputMode="numeric"
+                  value={countText}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, "");
+                    if (v === "") return setCountText("");
+                    setCountText(String(Math.min(100, Number(v))));
+                  }}
+                  onBlur={() => { if (!countText.trim()) setCountText("1"); }}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">{t("1–100 questions per set. Leave it empty and click away to reset to 1.")}</p>
               </div>
+
+              <DifficultyControls
+                difficulty={difficulty}
+                setDifficulty={setDifficulty}
+                spec={spec}
+                setSpec={setSpec}
+              />
 
               <Button size="lg" onClick={run} className="w-full">
                 <Sparkles className="mr-2 h-4 w-4" /> {t("Generate quiz")}
@@ -321,7 +325,6 @@ function GeneratePage() {
         ) : (
           <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 space-y-5 sm:mt-8">
             <StageProgress stage={stage} timings={timings} totalMs={totalMs} />
-            <FunFactCard facts={facts} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -333,6 +336,124 @@ function GeneratePage() {
         onApply={useHelperText}
         initialInstruction={helperSeed}
       />
+    </div>
+  );
+}
+
+export function DifficultyControls({
+  difficulty,
+  setDifficulty,
+  spec,
+  setSpec,
+}: {
+  difficulty: Difficulty;
+  setDifficulty: (d: Difficulty) => void;
+  spec: StyleSpec;
+  setSpec: (s: StyleSpec) => void;
+}) {
+  const t = useT();
+  const advanced = spec.mode === "advanced";
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setSpec({ ...spec, mode: "simple" })}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm",
+            !advanced ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
+          )}
+        >
+          <Zap className="h-4 w-4 shrink-0" /> <span className="truncate">{t("Simple")}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSpec({ ...spec, mode: "advanced" })}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm",
+            advanced ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
+          )}
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" /> <span className="truncate">{t("Advanced")}</span>
+        </button>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">{t("Difficulty")}</Label>
+        <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="easy">{t("Easy")}</SelectItem>
+            <SelectItem value="medium">{t("Medium")}</SelectItem>
+            <SelectItem value="hard">{t("Hard")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!advanced ? (
+        <button
+          type="button"
+          onClick={() => setSpec({ ...spec, shortQA: !spec.shortQA })}
+          className={cn(
+            "w-full rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors",
+            spec.shortQA ? "border-primary/60 bg-primary/15" : "border-border bg-secondary/50 hover:bg-accent/60",
+          )}
+        >
+          {t("Short questions & answers")}
+          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+            {t("Keep every stem and option as short as possible.")}
+          </span>
+        </button>
+      ) : (
+        <div className="space-y-4">
+          <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
+          <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
+          <BarRow label={t("Complexity")} low={t("Simple")} high={t("Complex")} value={spec.complexity} onChange={(v) => setSpec({ ...spec, complexity: v })} />
+          <BarRow label={t("Obscurity")} low={t("Explicit")} high={t("Implicit")} value={spec.obscurity} onChange={(v) => setSpec({ ...spec, obscurity: v })} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarRow({
+  label,
+  low,
+  high,
+  value,
+  onChange,
+}: {
+  label: string;
+  low: string;
+  high: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{value}/5</span>
+      </div>
+      <div className="flex gap-1.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${label} ${n}`}
+            onClick={() => onChange(n)}
+            className={cn(
+              "h-8 flex-1 rounded-md border transition-colors",
+              n <= value ? "border-primary/60 bg-primary" : "border-border bg-secondary/60 hover:bg-accent/60",
+            )}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+        <span>{low}</span>
+        <span>{high}</span>
+      </div>
     </div>
   );
 }
@@ -381,39 +502,6 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
         </span>
         <span className="shrink-0 font-semibold tabular-nums">{formatMs(totalMs)}</span>
       </div>
-    </div>
-  );
-}
-
-function FunFactCard({ facts }: { facts: string[] }) {
-  const t = useT();
-  const [i, setI] = useState(0);
-
-  useEffect(() => {
-    if (facts.length < 2) return;
-    const id = setInterval(() => setI((n) => (n + 1) % facts.length), 30000);
-    return () => clearInterval(id);
-  }, [facts]);
-
-  return (
-    <div className="panel p-5 sm:p-6">
-      <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-        <Lightbulb className="h-4 w-4 text-primary" /> {t("Fun fact")}
-      </p>
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={facts[i] ?? "loading"}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="mt-2 text-sm leading-relaxed sm:text-base"
-        >
-          {facts.length ? facts[i] : t("Finding fun facts about your topic…")}
-        </motion.p>
-      </AnimatePresence>
-      {facts.length > 1 && (
-        <p className="mt-3 text-xs text-muted-foreground">{t("A new fact appears every 30 seconds.")}</p>
-      )}
     </div>
   );
 }

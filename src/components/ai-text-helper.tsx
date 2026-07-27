@@ -20,7 +20,10 @@ import {
 } from "@/components/ui/dialog";
 
 type Mode = "source-finder" | "refine-check";
-type PlanQ = { question: string; options: string[]; answer: string };
+type PlanQ = { question: string; options: string[]; picks: string[]; custom: string };
+
+const answerOf = (p: PlanQ) => [...p.picks, p.custom.trim()].filter(Boolean).join("; ");
+
 
 export function AiTextHelper({
   open,
@@ -95,7 +98,7 @@ export function AiTextHelper({
             mode === "refine-check"
               ? { improve, factCheck, custom: customOn ? custom.trim() : "" }
               : undefined,
-          planAnswers: (answers ?? planQs ?? []).map((p) => ({ question: p.question, answer: p.answer })),
+          planAnswers: (answers ?? planQs ?? []).map((p) => ({ question: p.question, answer: answerOf(p) })).filter((p) => p.answer),
         },
       });
       setResult(text);
@@ -123,7 +126,7 @@ export function AiTextHelper({
           existingText: mode === "refine-check" ? existing : "",
         },
       });
-      setPlanQs(questions.map((q) => ({ ...q, answer: "" })));
+      setPlanQs(questions.map((q) => ({ ...q, picks: [], custom: "" })));
       setStep(0);
       setCustomPick(false);
     } catch {
@@ -133,11 +136,16 @@ export function AiTextHelper({
     }
   };
 
-  const setAnswer = (value: string) => {
-    setPlanQs((prev) => prev!.map((p, i) => (i === step ? { ...p, answer: value } : p)));
+  const patchCurrent = (patch: Partial<PlanQ>) => {
+    setPlanQs((prev) => prev!.map((p, i) => (i === step ? { ...p, ...patch } : p)));
   };
 
-  const nextStep = () => {
+  const togglePick = (opt: string) => {
+    const p = planQs![step];
+    patchCurrent({ picks: p.picks.includes(opt) ? p.picks.filter((x) => x !== opt) : [...p.picks, opt] });
+  };
+
+  const advance = () => {
     if (!planQs) return;
     if (step + 1 >= planQs.length) {
       void generate();
@@ -146,6 +154,7 @@ export function AiTextHelper({
       setCustomPick(false);
     }
   };
+
 
   const busy = loading || planning;
   const current = planQs?.[step];
@@ -178,13 +187,10 @@ export function AiTextHelper({
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => {
-                    setCustomPick(false);
-                    setAnswer(opt);
-                  }}
+                  onClick={() => togglePick(opt)}
                   className={cn(
                     "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
-                    !customPick && current.answer === opt
+                    current.picks.includes(opt)
                       ? "border-primary/60 bg-primary text-primary-foreground"
                       : "border-border bg-secondary/50 hover:bg-accent/60",
                   )}
@@ -195,8 +201,8 @@ export function AiTextHelper({
               <button
                 type="button"
                 onClick={() => {
-                  setCustomPick(true);
-                  setAnswer("");
+                  setCustomPick((c) => !c);
+                  if (customPick) patchCurrent({ custom: "" });
                 }}
                 className={cn(
                   "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
@@ -207,16 +213,17 @@ export function AiTextHelper({
               </button>
               {customPick && (
                 <Textarea
-                  value={current.answer}
-                  onChange={(e) => setAnswer(e.target.value)}
+                  value={current.custom}
+                  onChange={(e) => patchCurrent({ custom: e.target.value })}
                   placeholder={t("Describe what you want instead…")}
                   className="min-h-[70px]"
                 />
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {t("These answers make the text match your style. You can skip, or turn planning off in Settings.")}
+              {t("Pick as many as you like. Skip moves past just this question, or turn planning off in Settings.")}
             </p>
+
           </div>
         ) : (
           <div className="space-y-4">
@@ -290,12 +297,20 @@ export function AiTextHelper({
               <>
                 <Button
                   variant="secondary"
-                  onClick={() => generate(planQs!.map((p) => ({ ...p, answer: "" })))}
+                  onClick={() => {
+                    const cleared = planQs!.map((p, i) => (i === step ? { ...p, picks: [], custom: "" } : p));
+                    setPlanQs(cleared);
+                    setCustomPick(false);
+                    if (step + 1 >= cleared.length) void generate(cleared);
+                    else setStep((s) => s + 1);
+                  }}
+
                   disabled={busy}
                 >
                   {t("Skip")}
                 </Button>
-                <Button onClick={nextStep} disabled={busy || !current.answer.trim()}>
+                <Button onClick={advance} disabled={busy || !answerOf(current)}>
+
                   {loading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : step + 1 >= planQs!.length ? (

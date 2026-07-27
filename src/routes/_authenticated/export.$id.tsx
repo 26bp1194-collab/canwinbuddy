@@ -1,20 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { translateQuestions, explainAnswer, type Question } from "@/lib/ai.functions";
+import { translateQuestions, explainAnswer, editQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { formatMs, getQuizDefaults, getTimings, type StepTiming } from "@/lib/prefs";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 
 export const Route = createFileRoute("/_authenticated/export/$id")({
   head: ({ params }) => ({
@@ -47,6 +51,12 @@ function ExportPage() {
   const [playing, setPlaying] = useState(false);
   const [timing, setTiming] = useState<{ steps: StepTiming[]; totalMs: number } | null>(null);
   const [explainIndex, setExplainIndex] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const qc = useQueryClient();
+
+
 
   const { data, isLoading } = useQuery({
     queryKey: ["quiz-set", id],
@@ -101,6 +111,59 @@ function ExportPage() {
     toast.success(`${t("Downloaded")} ${PLATFORM_LABELS[platform]} .${ext}`);
   };
 
+  const share = async () => {
+    if (!data) return;
+    setSharing(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const { data: row, error } = await supabase
+        .from("quiz_shares")
+        .insert({
+          user_id: userRes.user!.id,
+          quiz_set_id: id,
+          title: data.title,
+          questions: JSON.parse(JSON.stringify(questions)),
+          question_count: questions.length,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      const url = `${window.location.origin}/play/${row.id}`;
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      toast.success(t("Share link copied — anyone can play, no account needed."));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't create a share link"));
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const applyEdits = async (indices: number[], instruction: string, presets: string[]) => {
+    const subset = indices.map((i) => original[i]);
+    const { questions: out } = await editQuestions({
+      data: {
+        sourceText: (data?.source_text as string) ?? "",
+        questions: subset,
+        instruction,
+        presets,
+      },
+    });
+    const next = [...original];
+    indices.forEach((idx, k) => { next[idx] = out[k] ?? next[idx]; });
+    const { error } = await supabase
+      .from("quiz_sets")
+      .update({ questions: JSON.parse(JSON.stringify(next)), question_count: next.length })
+      .eq("id", id);
+    if (error) throw error;
+    setTranslated({});
+    setLanguage("English");
+    setSelected([]);
+    await qc.invalidateQueries({ queryKey: ["quiz-set", id] });
+  };
+
+  const toggleRow = (i: number) =>
+    setSelected((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]));
+
   if (isLoading) return <div className="p-10 text-muted-foreground">{t("Loading…")}</div>;
   if (!data) return <div className="p-10">{t("Not found.")} <Link to="/history" className="text-primary underline">{t("Back to history")}</Link></div>;
 
@@ -110,29 +173,25 @@ function ExportPage() {
         <ArrowLeft className="h-4 w-4" /> {t("New quiz")}
       </Link>
 
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
-        <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {questions.length} {t("verified questions · ready to export")}
-        </p>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {questions.length} {t("verified questions · ready to export")}
+          </p>
+        </div>
+        {timing && (
+          <span
+            title={t("Generation time")}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2.5 py-1 text-[11px] text-muted-foreground"
+          >
+            <Clock className="h-3.5 w-3.5 text-primary" />
+            <span className="hidden sm:inline">{t("Generation time")}</span>
+            <span className="font-semibold tabular-nums text-foreground">{formatMs(timing.totalMs)}</span>
+          </span>
+        )}
       </motion.div>
 
-      {timing && (
-        <div className="panel mt-5 p-4 sm:p-5">
-          <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-            <Clock className="h-4 w-4 text-primary" /> {t("Generation time")}
-          </p>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums">{formatMs(timing.totalMs)}</p>
-          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-            {timing.steps.map((s) => (
-              <li key={s.label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                <span className="min-w-0 truncate">{t(s.label)}</span>
-                <span className="shrink-0 tabular-nums">{formatMs(s.ms)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="panel mt-6 p-4 sm:mt-8 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -167,7 +226,7 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:flex">
+          <div className="grid grid-cols-4 gap-2 sm:flex">
             <Button onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
@@ -177,6 +236,10 @@ function ExportPage() {
             </Button>
             <Button variant="secondary" onClick={() => setPlaying(true)}>
               <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
+            </Button>
+            <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
+              {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
+              <span className="hidden sm:inline">{t("Share")}</span>
             </Button>
           </div>
         </div>
@@ -188,14 +251,29 @@ function ExportPage() {
 {text}
         </pre>
 
-        <p className="mt-8 text-xs uppercase tracking-wider text-muted-foreground">{t("Preview")}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("How your rows will land in a spreadsheet.")}
-        </p>
+        <div className="mt-8 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Preview")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("Tick questions to edit them, or edit the whole set at once.")}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <Button size="sm" variant="secondary" onClick={() => { setSelected(original.map((_, i) => i)); setEditOpen(true); }}>
+              <Wand2 className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Edit all")}</span>
+            </Button>
+            <Button size="sm" disabled={selected.length === 0} onClick={() => setEditOpen(true)}>
+              <Wand2 className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">{t("Edit selected")}</span>
+              <span className="ml-1 tabular-nums">{selected.length || ""}</span>
+            </Button>
+          </div>
+        </div>
         <div className="mt-4 max-h-[420px] overflow-auto rounded-xl border border-border sm:max-h-[560px]">
-          <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+          <table className="w-full min-w-[760px] border-collapse text-left text-xs">
             <thead className="sticky top-0 bg-secondary">
               <tr>
+                <th className="border-b border-border px-3 py-2" />
                 <th className="border-b border-border px-3 py-2 font-semibold text-muted-foreground">#</th>
                 {PLATFORM_COLUMNS[platform].map((c) => (
                   <th key={c} className="border-b border-border px-3 py-2 font-semibold">{c}</th>
@@ -205,7 +283,14 @@ function ExportPage() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className={i % 2 ? "bg-secondary/20" : undefined}>
+                <tr key={i} className={cn(selected.includes(i) ? "bg-primary/10" : i % 2 ? "bg-secondary/20" : undefined)}>
+                  <td className="border-b border-border px-3 py-2 align-top">
+                    <Checkbox
+                      checked={selected.includes(i)}
+                      onCheckedChange={() => toggleRow(i)}
+                      aria-label={`Select question ${i + 1}`}
+                    />
+                  </td>
                   <td className="border-b border-border px-3 py-2 text-muted-foreground tabular-nums">{i + 1}</td>
                   {r.map((cell, j) => (
                     <td key={j} className="border-b border-border px-3 py-2 align-top">{cell}</td>
@@ -222,11 +307,22 @@ function ExportPage() {
         </div>
       </div>
 
+      <EditDialog
+        open={editOpen}
+        count={selected.length}
+        onOpenChange={setEditOpen}
+        onApply={async (instruction, presets) => {
+          await applyEdits([...selected].sort((a, b) => a - b), instruction, presets);
+        }}
+      />
+
       <ExplainDialog
         question={explainIndex !== null ? questions[explainIndex] : null}
         sourceText={(data.source_text as string) ?? ""}
         onClose={() => setExplainIndex(null)}
       />
+
+
 
       <AnimatePresence>
         {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
@@ -331,6 +427,109 @@ function ExplainDialog({
             )}
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PRESETS = [
+  "Make them easier",
+  "Make them harder",
+  "Make them shorter",
+  "Make them longer",
+  "Simplify the wording",
+  "Add more context to each question",
+  "Make the wrong options more tempting",
+  "Fix grammar and typos",
+];
+
+function EditDialog({
+  open,
+  count,
+  onOpenChange,
+  onApply,
+}: {
+  open: boolean;
+  count: number;
+  onOpenChange: (v: boolean) => void;
+  onApply: (instruction: string, presets: string[]) => Promise<void>;
+}) {
+  const t = useT();
+  const [picks, setPicks] = useState<string[]>([]);
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPicks([]);
+      setPrompt("");
+    }
+  }, [open]);
+
+  const toggle = (p: string) => setPicks((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]));
+
+  const run = async () => {
+    if (!picks.length && !prompt.trim()) {
+      toast.error(t("Pick a change or describe what you want."));
+      return;
+    }
+    setBusy(true);
+    try {
+      await onApply(prompt.trim(), picks);
+      toast.success(t("Questions updated"));
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't update those questions"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
+      <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">{t("Edit questions")}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            {count} {count === 1 ? t("question selected") : t("questions selected")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => toggle(p)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  picks.includes(p)
+                    ? "border-primary/60 bg-primary text-primary-foreground"
+                    : "border-border bg-secondary/50 hover:bg-accent/60",
+                )}
+              >
+                {t(p)}
+              </button>
+            ))}
+          </div>
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t("Tell the AI what to change, e.g. focus more on dates and keep options under 5 words.")}
+            className="min-h-[100px]"
+          />
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy} className="w-full sm:w-auto">
+            {t("Cancel")}
+          </Button>
+          <Button onClick={run} disabled={busy}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+            {t("Apply changes")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

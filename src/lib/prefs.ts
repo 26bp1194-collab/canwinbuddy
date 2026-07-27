@@ -33,11 +33,30 @@ export function usePlanningEnabled() {
 
 export type Difficulty = "easy" | "medium" | "hard";
 
+export type StyleSpec = {
+  mode: "simple" | "advanced";
+  shortQA: boolean;
+  questionLength: number;
+  answerLength: number;
+  complexity: number;
+  obscurity: number;
+};
+
+export const DEFAULT_SPEC: StyleSpec = {
+  mode: "simple",
+  shortQA: false,
+  questionLength: 3,
+  answerLength: 3,
+  complexity: 3,
+  obscurity: 3,
+};
+
 export type QuizDefaults = {
   count: number;
   difficulty: Difficulty;
   platform: "blooket" | "gimkit" | "gimkit2" | "kahoot";
   language: string;
+  spec: StyleSpec;
 };
 
 export const DEFAULT_QUIZ_DEFAULTS: QuizDefaults = {
@@ -45,14 +64,18 @@ export const DEFAULT_QUIZ_DEFAULTS: QuizDefaults = {
   difficulty: "medium",
   platform: "blooket",
   language: "English",
+  spec: DEFAULT_SPEC,
 };
+
 
 export function getQuizDefaults(): QuizDefaults {
   if (typeof window === "undefined") return DEFAULT_QUIZ_DEFAULTS;
   try {
     const raw = window.localStorage.getItem(DEFAULTS_KEY);
     if (!raw) return DEFAULT_QUIZ_DEFAULTS;
-    return { ...DEFAULT_QUIZ_DEFAULTS, ...(JSON.parse(raw) as Partial<QuizDefaults>) };
+    const stored = JSON.parse(raw) as Partial<QuizDefaults>;
+    return { ...DEFAULT_QUIZ_DEFAULTS, ...stored, spec: { ...DEFAULT_SPEC, ...(stored.spec ?? {}) } };
+
   } catch {
     return DEFAULT_QUIZ_DEFAULTS;
   }
@@ -85,7 +108,10 @@ export type GenerateDraft = {
   title: string;
   count: number;
   difficulty: Difficulty;
+  spec?: StyleSpec;
 };
+
+
 
 export function getDraft(): GenerateDraft | null {
   if (typeof window === "undefined") return null;

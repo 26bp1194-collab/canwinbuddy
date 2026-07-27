@@ -11,11 +11,49 @@ const QuestionSchema = z.object({
 
 export type Question = z.infer<typeof QuestionSchema>;
 
+const StyleSpecSchema = z.object({
+  mode: z.enum(["simple", "advanced"]).default("simple"),
+  shortQA: z.boolean().default(false),
+  questionLength: z.number().int().min(1).max(5).default(3),
+  answerLength: z.number().int().min(1).max(5).default(3),
+  complexity: z.number().int().min(1).max(5).default(3),
+  obscurity: z.number().int().min(1).max(5).default(3),
+});
+
+export type StyleSpec = z.infer<typeof StyleSpecSchema>;
+
+const SCALE = ["very low", "low", "medium", "high", "very high"];
+
+function styleBlock(spec?: Partial<StyleSpec> | null) {
+  if (!spec) return "";
+  if (spec.mode !== "advanced") {
+    return spec.shortQA
+      ? `\n\nSHORT Q&A MODE: keep every question stem under 15 words and every choice under 6 words. Stay clear and still fully self-contained.`
+      : "";
+  }
+  const s = { questionLength: 3, answerLength: 3, complexity: 3, obscurity: 3, ...spec };
+  return `\n\nADVANCED STYLE CONTROLS (1 = lowest, 5 = highest):
+- Question length ${s.questionLength}/5 (${SCALE[s.questionLength - 1]}): 1 = very short stems (<10 words), 5 = long detailed stems (30-45 words).
+- Answer length ${s.answerLength}/5 (${SCALE[s.answerLength - 1]}): 1 = very short options (1-3 words), 5 = long full-sentence options.
+- Complexity ${s.complexity}/5 (${SCALE[s.complexity - 1]}): 1 = simple single-step recall, 5 = complex multi-step reasoning.
+- Obscurity ${s.obscurity}/5 (${SCALE[s.obscurity - 1]}): 1 = explicit, the answer is stated directly in the notes, 5 = implicit, the answer must be inferred from the notes.
+Respect all four controls at once. They never override the requirement that every question is answerable from the notes and self-contained.`;
+}
+
+const SELF_CONTAINED = `SELF-CONTAINED CONTEXT (critical):
+- Every question must be answerable on its own, without seeing the notes, the other questions, or any earlier context.
+- Put the needed context inside the stem: name the subject, topic, period, formula, or entity explicitly instead of using "it", "this", "the author", "the above", "the experiment".
+- Never reference "the passage", "the notes", "the text", "the diagram" or question numbers.
+- If a term only makes sense with a definition, include the short defining phrase in the stem.
+- Where an example helps, write a short example in the same style as the notes — a few short notes only, never long extra material.`;
+
 const InputSchema = z.object({
   sourceText: z.string().min(20),
   count: z.number().int().min(1).max(100),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  spec: StyleSpecSchema.partial().optional(),
 });
+
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
@@ -112,7 +150,7 @@ ${MATH_RULES}`;
 
 /* ---------------- 2. Generate ---------------- */
 
-function genSystemPrompt(difficulty: string, analysis?: Analysis | null) {
+function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null) {
   const topics = analysis?.topics?.length
     ? `\n\nANALYSED TOPICS (spread questions evenly across these):\n${analysis.topics.map((t) => `- ${t}`).join("\n")}`
     : "";
@@ -139,10 +177,11 @@ COVERAGE:
 - Spread questions across the analysed topics and the whole source; do not cluster on the opening paragraphs.
 
 STYLE:
-- Self-contained stems: never write "according to the passage/notes/text".
 - Vary correctIndex across 0,1,2,3 — do not bias toward 0 or 1.
 - Do not repeat or lightly rephrase questions already accepted.
-${MATH_RULES}${topics}${facts}`;
+
+${SELF_CONTAINED}
+${MATH_RULES}${styleBlock(spec)}${topics}${facts}`;
 }
 
 const GenerateInput = InputSchema.extend({
@@ -153,10 +192,11 @@ export const generateQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => GenerateInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, count, difficulty } = data;
+    const { sourceText, count, difficulty, spec } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
-    const systemPrompt = genSystemPrompt(difficulty, analysis);
+    const systemPrompt = genSystemPrompt(difficulty, analysis, spec);
+
 
     const validated: Question[] = [];
     const seen = new Set<string>();
@@ -218,23 +258,23 @@ const ReviewSchema = z.object({
   ),
 });
 
-const REVIEW_SYSTEM = (difficulty: string) => `You are a strict quiz quality reviewer.
+const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
 Check each question for:
 1. Is the marked correct choice actually supported by its sourceQuote and the surrounding notes?
 2. Are all distractors plausible and non-joke, similar in length and grammar, with only one correct answer?
 3. Does the difficulty roughly match "${difficulty}"?
-4. Is the stem self-contained and unambiguous (no "according to the passage")?
+4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
 5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
-Each issue is one short, actionable sentence.`;
+Each issue is one short, actionable sentence.${styleBlock(spec)}`;
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string) {
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null) {
   const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
     questions.map((q, index) => ({ index, ...q })),
   )}`;
   const raw = await callAI([
-    { role: "system", content: REVIEW_SYSTEM(difficulty) },
+    { role: "system", content: REVIEW_SYSTEM(difficulty, spec) },
     { role: "user", content: user },
   ]);
   try {
@@ -246,6 +286,7 @@ async function reviewBatch(sourceText: string, questions: Question[], difficulty
   }
 }
 
+
 async function regenerateOne(
   sourceText: string,
   difficulty: string,
@@ -253,6 +294,8 @@ async function regenerateOne(
   failed: Question,
   issues: string[],
   accepted: Question[],
+  spec?: Partial<StyleSpec> | null,
+
 ): Promise<Question | null> {
   const user = `Write ONE replacement quiz question.
 
@@ -274,7 +317,7 @@ Return JSON with exactly one item: {"questions":[{...}]}
 SOURCE:
 """${sourceText}"""`;
   const raw = await callAI([
-    { role: "system", content: genSystemPrompt(difficulty, analysis) },
+    { role: "system", content: genSystemPrompt(difficulty, analysis, spec) },
     { role: "user", content: user },
   ]);
   try {
@@ -292,6 +335,8 @@ const ReviewInput = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
   requested: z.number().int().min(1).max(100),
   analysis: AnalysisSchema.partial().optional(),
+  spec: StyleSpecSchema.partial().optional(),
+
 });
 
 const MAX_ATTEMPTS_PER_ITEM = 2;
@@ -301,11 +346,12 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => ReviewInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, questions, difficulty, requested } = data;
+    const { sourceText, questions, difficulty, requested, spec } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
 
-    const reviews = await reviewBatch(sourceText, questions, difficulty);
+    const reviews = await reviewBatch(sourceText, questions, difficulty, spec);
+
     const verdict = new Map(reviews.map((r) => [r.index, r]));
 
     const accepted: Question[] = [];
@@ -325,7 +371,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       let fixed = false;
       for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_ITEM && budget > 0; attempt++) {
         budget--;
-        const replacement = await regenerateOne(sourceText, difficulty, analysis, current, issues, accepted);
+        const replacement = await regenerateOne(sourceText, difficulty, analysis, current, issues, accepted, spec);
         if (!replacement) continue;
         if (!validateQuestion(replacement, sourceNorm)) {
           current = replacement;
@@ -337,7 +383,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
           issues = ["Duplicate of an already-accepted question. Cover a different topic."];
           continue;
         }
-        const [check] = await reviewBatch(sourceText, [replacement], difficulty);
+        const [check] = await reviewBatch(sourceText, [replacement], difficulty, spec);
         if (check && !check.pass) {
           current = replacement;
           issues = check.issues;
@@ -528,31 +574,55 @@ export const translateQuestions = createServerFn({ method: "POST" })
     return { questions: out };
   });
 
-/* ---------------- Fun facts ---------------- */
+/* ---------------- Edit / regenerate existing questions ---------------- */
 
-const FunFactsInput = z.object({
-  topic: z.string().min(10).max(6000),
+const EditInput = z.object({
+  sourceText: z.string().max(40000).optional().default(""),
+  questions: z.array(QuestionSchema).min(1).max(100),
+  instruction: z.string().max(2000).optional().default(""),
+  presets: z.array(z.string()).max(10).optional().default([]),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  spec: StyleSpecSchema.partial().optional(),
 });
 
-export const funFacts = createServerFn({ method: "POST" })
+export const editQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((raw: unknown) => FunFactsInput.parse(raw))
+  .inputValidator((raw: unknown) => EditInput.parse(raw))
   .handler(async ({ data }) => {
-    const system = `You produce short, surprising, true fun facts related to a study topic, to entertain someone while they wait.
-- Return ONLY valid JSON: {"facts":[string]}
-- Give 10 facts. Each fact is one sentence, under 200 characters, self-contained and genuinely interesting.
-- Facts must be real and accurate. No made-up statistics.
-${MATH_RULES}`;
+    const { sourceText, questions, instruction, presets, difficulty, spec } = data;
+    const asks = [...presets.map((p) => `- ${p}`), instruction.trim() ? `- ${instruction.trim()}` : ""].filter(Boolean);
+    const system = `You rewrite existing multiple-choice quiz questions on request.
+- Return ONLY valid JSON: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
+- Return EXACTLY ${questions.length} question(s), in the same order as the input.
+- Keep every question grounded in the provided source material; "sourceQuote" must stay a verbatim substring of the source.
+- Exactly 4 choices, one correct, plausible parallel distractors.
+- Baseline difficulty: ${difficulty}.
+
+${SELF_CONTAINED}
+${MATH_RULES}${styleBlock(spec)}`;
+    const user = `Requested changes:\n${asks.join("\n") || "- Improve the questions"}\n\nQUESTIONS TO REWRITE:\n${JSON.stringify(
+      questions,
+    )}${sourceText ? `\n\nSOURCE:\n"""${sourceText.slice(0, 30000)}"""` : ""}`;
     const raw = await callAI([
       { role: "system", content: system },
-      { role: "user", content: `Topic material (may be long, use the main subject):\n"""${data.topic.slice(0, 4000)}"""` },
+      { role: "user", content: user },
     ]);
+    let parsed: { questions?: unknown[] };
     try {
-      const parsed = z.object({ facts: z.array(z.string()).min(1) }).parse(JSON.parse(raw));
-      return { facts: parsed.facts.slice(0, 12) };
+      parsed = JSON.parse(raw);
     } catch {
-      return { facts: [] as string[] };
+      throw new Error("Couldn't apply those changes. Try again.");
     }
+    const sourceNorm = normalize(sourceText);
+    const out: Question[] = questions.map((original, i) => {
+      const p = QuestionSchema.safeParse(parsed.questions?.[i]);
+      if (!p.success) return original;
+      if (sourceText && !validateQuestion(p.data, sourceNorm)) {
+        return { ...p.data, sourceQuote: original.sourceQuote };
+      }
+      return p.data;
+    });
+    return { questions: out };
   });
 
 /* ---------------- Answer explanation & follow-up ---------------- */
@@ -568,20 +638,22 @@ export const explainAnswer = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => ExplainInput.parse(raw))
   .handler(async ({ data }) => {
     const { question: q, userQuestion, sourceText } = data;
-    const system = `You are a patient tutor explaining quiz answers.
-- Reply in plain prose, no markdown headers, 2-5 short sentences.
-- Explain clearly WHY the correct answer is correct, and briefly why the tempting wrong options are not.
+    const system = `You explain quiz answers as a short bullet list.
+- Reply with 2-4 bullet points ONLY. Each bullet starts with "• " on its own line.
+- Each bullet is one short clause, max 15 words. No intro, no closing sentence, no markdown headers.
+- Bullet 1: why the correct answer is correct. Remaining bullets: the key reason the tempting wrong options fail.
 ${MATH_RULES}`;
     const user = `QUESTION: ${q.question}
 OPTIONS:
 ${q.choices.map((c, i) => `${String.fromCharCode(65 + i)}. ${c}${i === q.correctIndex ? "  <- correct" : ""}`).join("\n")}
 SUPPORTING SOURCE QUOTE: "${q.sourceQuote}"${sourceText ? `\nWIDER SOURCE (excerpt): """${sourceText.slice(0, 4000)}"""` : ""}${
-      userQuestion.trim() ? `\n\nThe learner still doesn't understand and asks: "${userQuestion.trim()}" — answer this specifically.` : ""
+      userQuestion.trim() ? `\n\nThe learner still doesn't understand and asks: "${userQuestion.trim()}" — answer this specifically, still as short bullets.` : ""
     }`;
     const text = (await callAI([{ role: "system", content: system }, { role: "user", content: user }], false))?.trim();
     if (!text) throw new Error("No explanation returned");
     return { text };
   });
+
 
 /* ---------------- Post-quiz feedback ---------------- */
 
