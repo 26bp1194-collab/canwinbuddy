@@ -198,57 +198,23 @@ function HistoryPage() {
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Groups")}</p>
           {groups.map((g) => {
             const ids = idsInGroup(g.id);
-            const open = openGroups.includes(g.id);
-            const sets = (data ?? []).filter((r) => ids.includes(r.id));
             return (
-              <div key={g.id} className="panel p-4">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((s) => (open ? s.filter((x) => x !== g.id) : [...s, g.id]))}
-                    className="flex min-w-0 items-center gap-2 text-left"
-                  >
-                    {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                    <Folder className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="min-w-0 truncate font-medium">{g.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">({ids.length})</span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button size="sm" variant="secondary" disabled={loadingPlay} onClick={() => playGroup(g.id, g.name)}>
-                      <Play className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Play all")}</span>
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label={`Delete group ${g.name}`}
-                      onClick={() => deleteGroup.mutate(g.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                {open && (
-                  <ul className="mt-3 space-y-2 border-t border-border pt-3">
-                    {sets.length === 0 ? (
-                      <li className="text-sm text-muted-foreground">{t("No quizzes in this group yet.")}</li>
-                    ) : (
-                      sets.map((r) => (
-                        <li key={r.id}>
-                          <Link to="/export/$id" params={{ id: r.id }} className="block min-w-0 rounded-lg px-2 py-1.5 hover:bg-accent/60">
-                            <span className="block truncate text-sm">{r.title}</span>
-                            <span className="text-xs text-muted-foreground">{r.question_count} {t("questions")}</span>
-                          </Link>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                )}
-              </div>
+              <Link
+                key={g.id}
+                to="/group/$id"
+                params={{ id: g.id }}
+                className="panel flex items-center gap-2 p-4 transition-colors hover:bg-accent/40"
+              >
+                <Folder className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
             );
           })}
         </div>
       )}
+
 
       <div className="mt-8">
         {isLoading ? (

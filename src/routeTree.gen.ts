@@ -20,6 +20,7 @@ import { Route as AuthenticatedGuideRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedGenerateRouteImport } from './routes/_authenticated/generate'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedGroupIdRouteImport } from './routes/_authenticated/group.$id'
 import { Route as AuthenticatedExportIdRouteImport } from './routes/_authenticated/export.$id'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -76,6 +77,11 @@ const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedHistoryRoute,
 } as any)
+const AuthenticatedGroupIdRoute = AuthenticatedGroupIdRouteImport.update({
+  id: '/group/$id',
+  path: '/group/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedExportIdRoute = AuthenticatedExportIdRouteImport.update({
   id: '/export/$id',
   path: '/export/$id',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
+  '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesByTo {
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
+  '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesById {
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/_authenticated/export/$id': typeof AuthenticatedExportIdRoute
+  '/_authenticated/group/$id': typeof AuthenticatedGroupIdRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRouteTypes {
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/play/$id'
     | '/export/$id'
+    | '/group/$id'
     | '/history/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/play/$id'
     | '/export/$id'
+    | '/group/$id'
     | '/history/$id'
   id:
     | '__root__'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/play/$id'
     | '/_authenticated/export/$id'
+    | '/_authenticated/group/$id'
     | '/_authenticated/history/$id'
   fileRoutesById: FileRoutesById
 }
@@ -253,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
     }
+    '/_authenticated/group/$id': {
+      id: '/_authenticated/group/$id'
+      path: '/group/$id'
+      fullPath: '/group/$id'
+      preLoaderRoute: typeof AuthenticatedGroupIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/export/$id': {
       id: '/_authenticated/export/$id'
       path: '/export/$id'
@@ -281,6 +300,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedExportIdRoute: typeof AuthenticatedExportIdRoute
+  AuthenticatedGroupIdRoute: typeof AuthenticatedGroupIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -290,6 +310,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedExportIdRoute: AuthenticatedExportIdRoute,
+  AuthenticatedGroupIdRoute: AuthenticatedGroupIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
