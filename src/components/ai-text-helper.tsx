@@ -378,7 +378,7 @@ export function AiTextHelper({
                     {t("Generate")}
                   </Button>
                 ) : (
-                  <Button onClick={() => onApply(result)} disabled={busy}>
+                  <Button onClick={() => { clearHelperState(); onApply(result); }} disabled={busy}>
                     <CheckCircle2 className="mr-2 h-4 w-4" /> {t("Use Text")}
                   </Button>
                 )}
