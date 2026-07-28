@@ -297,29 +297,15 @@ function GeneratePage() {
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="count" className="mb-2 block">{t("Amount of questions")}</Label>
-                <Input
-                  id="count"
-                  type="text"
-                  inputMode="numeric"
-                  value={countText}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, "");
-                    if (v === "") return setCountText("");
-                    setCountText(String(Math.min(100, Number(v))));
-                  }}
-                  onBlur={() => { if (!countText.trim()) setCountText("1"); }}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">{t("1–100 questions per set. Leave it empty and click away to reset to 1.")}</p>
-              </div>
-
               <DifficultyControls
                 difficulty={difficulty}
                 setDifficulty={setDifficulty}
                 spec={spec}
                 setSpec={setSpec}
+                countText={countText}
+                setCountText={setCountText}
               />
+
 
               <Button size="lg" onClick={run} className="w-full">
                 <Sparkles className="mr-2 h-4 w-4" /> {t("Generate quiz")}
