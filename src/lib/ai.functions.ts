@@ -510,9 +510,9 @@ const PlanQuestionsSchema = z.object({
 
 const FALLBACK_PLAN = {
   questions: [
-    { question: "How long should the text be?", options: ["Short (~150 words)", "Medium (~400 words)", "Long (~800 words)"] },
-    { question: "What reading level should it use?", options: ["Simple and beginner-friendly", "Standard school level", "Advanced and technical"] },
-    { question: "What should it focus on?", options: ["Key facts and definitions", "Dates, names and numbers", "Causes, effects and relationships"] },
+    { question: "Which part of the topic should the text cover?", options: ["Core concepts and definitions", "Key people, dates and events", "Causes, effects and relationships", "Real examples and applications"] },
+    { question: "Which specific angle matters most to you?", options: ["Background and origins", "How it works step by step", "Comparisons and contrasts", "Common misconceptions"] },
+    { question: "What extra content should be included?", options: ["Named examples", "Key figures or formulas", "Important terminology", "Nothing extra"] },
   ],
 };
 
@@ -521,14 +521,16 @@ export const planTextQuestions = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => PlanInput.parse(raw))
   .handler(async ({ data }) => {
     const { mode, instruction, existingText } = data;
-    const system = `You help plan a piece of study text before writing it. Ask short multiple-choice questions so the result matches the user's style and needs.
+    const system = `You help pin down the CONTENT of a piece of study text before it is written. Ask short multiple-choice questions about WHAT information the text should contain.
 - Return ONLY valid JSON: {"questions":[{"question":string,"options":[string,string,string]}]}
 - Ask 3 questions maximum, each one short sentence.
 - Each question MUST have 3 or 4 short, concrete selectable options (a few words each). Never ask for free text.
-- Cover things like: length/detail level, tone & reading level, and focus or subtopics.`;
+- Questions MUST be about subject matter: which subtopics, which time period, which examples, which people/events/formulas, which scope or depth of the topic itself.
+- NEVER ask about text length, word count, tone, reading level, audience, format, or style. Those are forbidden.`;
     const user = `Mode: ${mode}\nUser description: ${instruction}${
       existingText.trim() ? `\nExisting text (first 600 chars): """${existingText.slice(0, 600)}"""` : ""
     }`;
+
 
     const raw = await callAI([
       { role: "system", content: system },
