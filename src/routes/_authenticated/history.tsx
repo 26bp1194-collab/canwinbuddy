@@ -56,8 +56,8 @@ function HistoryPage() {
   const [groupName, setGroupName] = useState("");
   const [assignFor, setAssignFor] = useState<Row | null>(null);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
-  const [playing, setPlaying] = useState<{ title: string; questions: Question[] } | null>(null);
-  const [loadingPlay, setLoadingPlay] = useState(false);
+
+
 
   const { data, isLoading } = useQuery({
     queryKey: ["history", user?.id],
