@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { aiTextHelper, planTextQuestions } from "@/lib/ai.functions";
-import { usePlanningEnabled } from "@/lib/prefs";
+import { usePlanningEnabled, getHelperState, saveHelperState, clearHelperState } from "@/lib/prefs";
+
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
