@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, Play, ChevronDown, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { QuizGame } from "@/components/quiz-game";
-import type { Question } from "@/lib/ai.functions";
+
 import { useT } from "@/lib/i18n";
 import {
   DropdownMenu,
