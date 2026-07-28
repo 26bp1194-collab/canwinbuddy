@@ -54,8 +54,27 @@ export function AiTextHelper({
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const hydrated = useRef(false);
+
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      hydrated.current = false;
+      return;
+    }
+    const saved = getHelperState<SavedHelper>();
+    if (saved && !initialInstruction) {
+      setMode(saved.mode);
+      setInstruction(saved.instruction);
+      setExisting(saved.existing || sourceText);
+      setImprove(saved.improve);
+      setFactCheck(saved.factCheck);
+      setCustomOn(saved.customOn);
+      setCustom(saved.custom);
+      setPlanQs(saved.planQs);
+      setStep(saved.step);
+      setCustomPick(saved.customPick);
+      setResult(saved.result);
+    } else {
       setMode("source-finder");
       setInstruction(initialInstruction);
       setExisting(sourceText);
@@ -68,7 +87,15 @@ export function AiTextHelper({
       setCustomPick(false);
       setResult("");
     }
+    hydrated.current = true;
   }, [open, sourceText, initialInstruction]);
+
+  /* Keep everything (including in-progress planning) for the next time it opens */
+  useEffect(() => {
+    if (!open || !hydrated.current) return;
+    saveHelperState({ mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result });
+  }, [open, mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result]);
+
 
   const validInput = () => {
     if (mode === "source-finder" && !instruction.trim()) {
