@@ -99,12 +99,16 @@ function GeneratePage() {
     restored.current = true;
   }, [t]);
 
-  /* Persist the draft so navigating away never loses work */
+  /* Persist the draft so navigating away never loses work — a blank page stays blank */
   useEffect(() => {
     if (!restored.current) return;
-    if (!source && !title) return;
+    if (!source.trim() && !title.trim()) {
+      clearDraft();
+      return;
+    }
     saveDraft({ source, title, count, difficulty, spec });
   }, [source, title, count, difficulty, spec]);
+
 
   const useHelperText = (text: string) => {
     setSource(text);
