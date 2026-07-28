@@ -158,28 +158,10 @@ function HistoryPage() {
   const idsInGroup = (groupId: string) =>
     (items ?? []).filter((i) => i.group_id === groupId).map((i) => i.quiz_set_id);
 
-  const playGroup = async (groupId: string, name: string) => {
-    const ids = idsInGroup(groupId);
-    if (!ids.length) {
-      toast.error(t("Add quizzes to this group first."));
-      return;
-    }
-    setLoadingPlay(true);
-    try {
-      const { data: sets, error } = await supabase.from("quiz_sets").select("questions").in("id", ids);
-      if (error) throw error;
-      const all = (sets ?? []).flatMap((s) => (s.questions as unknown as Question[]) ?? []);
-      if (!all.length) {
-        toast.error(t("No questions in this group yet."));
-        return;
-      }
-      setPlaying({ title: name, questions: all });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start group quiz");
-    } finally {
-      setLoadingPlay(false);
-    }
-  };
+  /* Quizzes that live in a group only show up inside that group */
+  const grouped = new Set((items ?? []).map((i) => i.quiz_set_id));
+  const ungrouped = (data ?? []).filter((r) => !grouped.has(r.id));
+
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
