@@ -201,16 +201,17 @@ function HistoryPage() {
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !data?.length ? (
+        ) : !ungrouped.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 font-medium">{t("No history yet")}</p>
+            <p className="mt-3 font-medium">{data?.length ? t("Every quiz is already in a group.") : t("No history yet")}</p>
             <p className="mt-1 text-sm text-muted-foreground">{t("Generate your first quiz to see it here.")}</p>
             <Button asChild className="mt-4"><Link to="/generate">{t("Generate now")}</Link></Button>
           </div>
         ) : (
           <ul className="space-y-3">
-            {data.map((row) => (
+            {ungrouped.map((row) => (
+
               <motion.li
                 key={row.id}
                 initial={{ opacity: 0, y: 6 }}
