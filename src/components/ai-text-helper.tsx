@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { aiTextHelper, planTextQuestions } from "@/lib/ai.functions";
-import { usePlanningEnabled } from "@/lib/prefs";
+import { usePlanningEnabled, getHelperState, saveHelperState, clearHelperState } from "@/lib/prefs";
+
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,21 @@ type Mode = "source-finder" | "refine-check";
 type PlanQ = { question: string; options: string[]; picks: string[]; custom: string };
 
 const answerOf = (p: PlanQ) => [...p.picks, p.custom.trim()].filter(Boolean).join("; ");
+
+type SavedHelper = {
+  mode: Mode;
+  instruction: string;
+  existing: string;
+  improve: boolean;
+  factCheck: boolean;
+  customOn: boolean;
+  custom: string;
+  planQs: PlanQ[] | null;
+  step: number;
+  customPick: boolean;
+  result: string;
+};
+
 
 
 export function AiTextHelper({
@@ -54,8 +70,27 @@ export function AiTextHelper({
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const hydrated = useRef(false);
+
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      hydrated.current = false;
+      return;
+    }
+    const saved = getHelperState<SavedHelper>();
+    if (saved && !initialInstruction) {
+      setMode(saved.mode);
+      setInstruction(saved.instruction);
+      setExisting(saved.existing || sourceText);
+      setImprove(saved.improve);
+      setFactCheck(saved.factCheck);
+      setCustomOn(saved.customOn);
+      setCustom(saved.custom);
+      setPlanQs(saved.planQs);
+      setStep(saved.step);
+      setCustomPick(saved.customPick);
+      setResult(saved.result);
+    } else {
       setMode("source-finder");
       setInstruction(initialInstruction);
       setExisting(sourceText);
@@ -68,7 +103,15 @@ export function AiTextHelper({
       setCustomPick(false);
       setResult("");
     }
+    hydrated.current = true;
   }, [open, sourceText, initialInstruction]);
+
+  /* Keep everything (including in-progress planning) for the next time it opens */
+  useEffect(() => {
+    if (!open || !hydrated.current) return;
+    saveHelperState({ mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result });
+  }, [open, mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result]);
+
 
   const validInput = () => {
     if (mode === "source-finder" && !instruction.trim()) {
@@ -335,7 +378,7 @@ export function AiTextHelper({
                     {t("Generate")}
                   </Button>
                 ) : (
-                  <Button onClick={() => onApply(result)} disabled={busy}>
+                  <Button onClick={() => { clearHelperState(); onApply(result); }} disabled={busy}>
                     <CheckCircle2 className="mr-2 h-4 w-4" /> {t("Use Text")}
                   </Button>
                 )}

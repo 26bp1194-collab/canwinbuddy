@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, Play, ChevronDown, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { QuizGame } from "@/components/quiz-game";
-import type { Question } from "@/lib/ai.functions";
+
 import { useT } from "@/lib/i18n";
 import {
   DropdownMenu,
@@ -56,8 +55,8 @@ function HistoryPage() {
   const [groupName, setGroupName] = useState("");
   const [assignFor, setAssignFor] = useState<Row | null>(null);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
-  const [playing, setPlaying] = useState<{ title: string; questions: Question[] } | null>(null);
-  const [loadingPlay, setLoadingPlay] = useState(false);
+
+
 
   const { data, isLoading } = useQuery({
     queryKey: ["history", user?.id],
@@ -158,28 +157,10 @@ function HistoryPage() {
   const idsInGroup = (groupId: string) =>
     (items ?? []).filter((i) => i.group_id === groupId).map((i) => i.quiz_set_id);
 
-  const playGroup = async (groupId: string, name: string) => {
-    const ids = idsInGroup(groupId);
-    if (!ids.length) {
-      toast.error(t("Add quizzes to this group first."));
-      return;
-    }
-    setLoadingPlay(true);
-    try {
-      const { data: sets, error } = await supabase.from("quiz_sets").select("questions").in("id", ids);
-      if (error) throw error;
-      const all = (sets ?? []).flatMap((s) => (s.questions as unknown as Question[]) ?? []);
-      if (!all.length) {
-        toast.error(t("No questions in this group yet."));
-        return;
-      }
-      setPlaying({ title: name, questions: all });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start group quiz");
-    } finally {
-      setLoadingPlay(false);
-    }
-  };
+  /* Quizzes that live in a group only show up inside that group */
+  const grouped = new Set((items ?? []).map((i) => i.quiz_set_id));
+  const ungrouped = (data ?? []).filter((r) => !grouped.has(r.id));
+
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
@@ -198,71 +179,38 @@ function HistoryPage() {
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Groups")}</p>
           {groups.map((g) => {
             const ids = idsInGroup(g.id);
-            const open = openGroups.includes(g.id);
-            const sets = (data ?? []).filter((r) => ids.includes(r.id));
             return (
-              <div key={g.id} className="panel p-4">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((s) => (open ? s.filter((x) => x !== g.id) : [...s, g.id]))}
-                    className="flex min-w-0 items-center gap-2 text-left"
-                  >
-                    {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                    <Folder className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="min-w-0 truncate font-medium">{g.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">({ids.length})</span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button size="sm" variant="secondary" disabled={loadingPlay} onClick={() => playGroup(g.id, g.name)}>
-                      <Play className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Play all")}</span>
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label={`Delete group ${g.name}`}
-                      onClick={() => deleteGroup.mutate(g.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                {open && (
-                  <ul className="mt-3 space-y-2 border-t border-border pt-3">
-                    {sets.length === 0 ? (
-                      <li className="text-sm text-muted-foreground">{t("No quizzes in this group yet.")}</li>
-                    ) : (
-                      sets.map((r) => (
-                        <li key={r.id}>
-                          <Link to="/export/$id" params={{ id: r.id }} className="block min-w-0 rounded-lg px-2 py-1.5 hover:bg-accent/60">
-                            <span className="block truncate text-sm">{r.title}</span>
-                            <span className="text-xs text-muted-foreground">{r.question_count} {t("questions")}</span>
-                          </Link>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                )}
-              </div>
+              <Link
+                key={g.id}
+                to="/group/$id"
+                params={{ id: g.id }}
+                className="panel flex items-center gap-2 p-4 transition-colors hover:bg-accent/40"
+              >
+                <Folder className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
             );
           })}
         </div>
       )}
 
+
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !data?.length ? (
+        ) : !ungrouped.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 font-medium">{t("No history yet")}</p>
+            <p className="mt-3 font-medium">{data?.length ? t("Every quiz is already in a group.") : t("No history yet")}</p>
             <p className="mt-1 text-sm text-muted-foreground">{t("Generate your first quiz to see it here.")}</p>
             <Button asChild className="mt-4"><Link to="/generate">{t("Generate now")}</Link></Button>
           </div>
         ) : (
           <ul className="space-y-3">
-            {data.map((row) => (
+            {ungrouped.map((row) => (
+
               <motion.li
                 key={row.id}
                 initial={{ opacity: 0, y: 6 }}
@@ -359,9 +307,8 @@ function HistoryPage() {
         </DialogContent>
       </Dialog>
 
-      <AnimatePresence>
-        {playing && <QuizGame questions={playing.questions} title={playing.title} onClose={() => setPlaying(null)} />}
-      </AnimatePresence>
+
+
     </div>
   );
 }

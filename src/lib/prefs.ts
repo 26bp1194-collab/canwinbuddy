@@ -4,6 +4,53 @@ const PLANNING_KEY = "cwb:helper-planning";
 const DEFAULTS_KEY = "cwb:quiz-defaults";
 const DRAFT_KEY = "cwb:generate-draft";
 const TIMING_PREFIX = "cwb:timing:";
+const HELPER_KEY = "cwb:helper-state";
+const SETTINGS_DRAFT_KEY = "cwb:settings-draft";
+
+/* ---------------- AI Text Helper saved state ---------------- */
+
+export function getHelperState<T>(): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(HELPER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveHelperState(state: unknown) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(HELPER_KEY, JSON.stringify(state));
+}
+
+export function clearHelperState() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(HELPER_KEY);
+}
+
+/* ---------------- Unsaved settings draft ---------------- */
+
+export function getSettingsDraft<T>(): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSettingsDraft(state: unknown) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SETTINGS_DRAFT_KEY, JSON.stringify(state));
+}
+
+export function clearSettingsDraft() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SETTINGS_DRAFT_KEY);
+}
+
 
 /* ---------------- Planning toggle ---------------- */
 
@@ -158,4 +205,16 @@ export function formatMs(ms: number) {
   if (s < 60) return `${s.toFixed(1)}s`;
   const m = Math.floor(s / 60);
   return `${m}m ${Math.round(s - m * 60)}s`;
+}
+
+/* ---------------- Direct setters (used by the Settings save bar) ---------------- */
+
+export function setPlanningEnabledValue(value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PLANNING_KEY, value ? "on" : "off");
+}
+
+export function setQuizDefaults(next: QuizDefaults) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DEFAULTS_KEY, JSON.stringify(next));
 }
