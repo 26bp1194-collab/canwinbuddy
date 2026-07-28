@@ -25,6 +25,21 @@ type PlanQ = { question: string; options: string[]; picks: string[]; custom: str
 
 const answerOf = (p: PlanQ) => [...p.picks, p.custom.trim()].filter(Boolean).join("; ");
 
+type SavedHelper = {
+  mode: Mode;
+  instruction: string;
+  existing: string;
+  improve: boolean;
+  factCheck: boolean;
+  customOn: boolean;
+  custom: string;
+  planQs: PlanQ[] | null;
+  step: number;
+  customPick: boolean;
+  result: string;
+};
+
+
 
 export function AiTextHelper({
   open,
