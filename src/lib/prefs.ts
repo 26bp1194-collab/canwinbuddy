@@ -206,3 +206,15 @@ export function formatMs(ms: number) {
   const m = Math.floor(s / 60);
   return `${m}m ${Math.round(s - m * 60)}s`;
 }
+
+/* ---------------- Direct setters (used by the Settings save bar) ---------------- */
+
+export function setPlanningEnabledValue(value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PLANNING_KEY, value ? "on" : "off");
+}
+
+export function setQuizDefaults(next: QuizDefaults) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DEFAULTS_KEY, JSON.stringify(next));
+}
