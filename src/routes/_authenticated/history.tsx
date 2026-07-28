@@ -308,9 +308,8 @@ function HistoryPage() {
         </DialogContent>
       </Dialog>
 
-      <AnimatePresence>
-        {playing && <QuizGame questions={playing.questions} title={playing.title} onClose={() => setPlaying(null)} />}
-      </AnimatePresence>
+
+
     </div>
   );
 }
