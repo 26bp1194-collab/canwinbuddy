@@ -335,14 +335,50 @@ export function DifficultyControls({
   setDifficulty,
   spec,
   setSpec,
+  countText,
+  setCountText,
 }: {
   difficulty: Difficulty;
   setDifficulty: (d: Difficulty) => void;
   spec: StyleSpec;
   setSpec: (s: StyleSpec) => void;
+  countText: string;
+  setCountText: (v: string) => void;
 }) {
   const t = useT();
   const advanced = spec.mode === "advanced";
+
+  const countField = (
+    <div className="min-w-0">
+      <Label htmlFor="count" className="mb-2 block">{t("Amount of questions")}</Label>
+      <Input
+        id="count"
+        type="text"
+        inputMode="numeric"
+        value={countText}
+        onChange={(e) => {
+          const v = e.target.value.replace(/[^0-9]/g, "");
+          if (v === "") return setCountText("");
+          setCountText(String(Math.min(100, Number(v))));
+        }}
+        onBlur={() => { if (!countText.trim()) setCountText("1"); }}
+      />
+    </div>
+  );
+
+  const difficultyField = (
+    <div className="min-w-0">
+      <Label className="mb-2 block">{t("Difficulty")}</Label>
+      <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="easy">{t("Easy")}</SelectItem>
+          <SelectItem value="medium">{t("Medium")}</SelectItem>
+          <SelectItem value="hard">{t("Hard")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
@@ -369,40 +405,42 @@ export function DifficultyControls({
         </button>
       </div>
 
-      <div>
-        <Label className="mb-2 block">{t("Difficulty")}</Label>
-        <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="easy">{t("Easy")}</SelectItem>
-            <SelectItem value="medium">{t("Medium")}</SelectItem>
-            <SelectItem value="hard">{t("Hard")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       {!advanced ? (
-        <button
-          type="button"
-          onClick={() => setSpec({ ...spec, shortQA: !spec.shortQA })}
-          className={cn(
-            "w-full rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors",
-            spec.shortQA ? "border-primary/60 bg-primary/15" : "border-border bg-secondary/50 hover:bg-accent/60",
-          )}
-        >
-          {t("Short questions & answers")}
-          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-            {t("Keep every stem and option as short as possible.")}
-          </span>
-        </button>
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {countField}
+            {difficultyField}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSpec({ ...spec, shortQA: !spec.shortQA })}
+            className={cn(
+              "w-full rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors",
+              spec.shortQA ? "border-primary/60 bg-primary/15" : "border-border bg-secondary/50 hover:bg-accent/60",
+            )}
+          >
+            {t("Short questions & answers")}
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              {t("Keep every stem and option as short as possible.")}
+            </span>
+          </button>
+        </>
       ) : (
         <div className="space-y-4">
-          <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
-          <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
-          <BarRow label={t("Complexity")} low={t("Simple")} high={t("Complex")} value={spec.complexity} onChange={(v) => setSpec({ ...spec, complexity: v })} />
-          <BarRow label={t("Obscurity")} low={t("Explicit")} high={t("Implicit")} value={spec.obscurity} onChange={(v) => setSpec({ ...spec, obscurity: v })} />
+          {countField}
+          {difficultyField}
+          <div className="grid grid-cols-2 gap-3">
+            <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
+            <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <BarRow label={t("Complexity")} low={t("Simple")} high={t("Complex")} value={spec.complexity} onChange={(v) => setSpec({ ...spec, complexity: v })} />
+            <BarRow label={t("Obscurity")} low={t("Explicit")} high={t("Implicit")} value={spec.obscurity} onChange={(v) => setSpec({ ...spec, obscurity: v })} />
+          </div>
         </div>
       )}
+      <p className="text-xs text-muted-foreground">{t("1–100 questions per set. Leave it empty and click away to reset to 1.")}</p>
+
     </div>
   );
 }
