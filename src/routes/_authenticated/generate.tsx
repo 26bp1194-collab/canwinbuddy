@@ -456,7 +456,6 @@ export function DifficultyControls({
       ) : (
         <div className="space-y-4">
           {countField}
-          {difficultyField}
           <div className="grid grid-cols-2 gap-3">
             <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
             <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
