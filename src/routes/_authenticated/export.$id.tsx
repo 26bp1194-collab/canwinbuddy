@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2 } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +54,7 @@ function ExportPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const qc = useQueryClient();
 
 
@@ -226,7 +227,7 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-2 sm:flex">
+          <div className="grid grid-cols-5 gap-2 sm:flex">
             <Button onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
@@ -236,6 +237,9 @@ function ExportPage() {
             </Button>
             <Button variant="secondary" onClick={() => setPlaying(true)}>
               <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
+            </Button>
+            <Button variant="secondary" onClick={() => setSourcesOpen(true)} aria-label={t("Sources")}>
+              <FileText className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Sources")}</span>
             </Button>
             <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
               {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
@@ -316,6 +320,8 @@ function ExportPage() {
         }}
       />
 
+      <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} sourceText={(data.source_text as string) ?? ""} />
+
       <ExplainDialog
         question={explainIndex !== null ? questions[explainIndex] : null}
         sourceText={(data.source_text as string) ?? ""}
@@ -334,6 +340,47 @@ function ExportPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+function SourcesDialog({
+  open,
+  onOpenChange,
+  sourceText,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  sourceText: string;
+}) {
+  const t = useT();
+  /* Uploaded files were merged in as "[filename]" blocks when the set was generated */
+  const files = Array.from(sourceText.matchAll(/^\[([^\]\n]+)\]$/gm)).map((m) => m[1]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">{t("Sources used")}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            {t("Everything this quiz was generated from — your pasted text and any uploaded files.")}
+          </DialogDescription>
+        </DialogHeader>
+
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {files.map((f) => (
+              <span key={f} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
+                <FileText className="h-3.5 w-3.5 text-primary" /> <span className="break-all">{f}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <pre className="max-h-[52vh] overflow-auto rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed whitespace-pre-wrap break-words">
+{sourceText || t("No source text was stored for this quiz.")}
+        </pre>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -432,15 +479,37 @@ function ExplainDialog({
   );
 }
 
-const PRESETS = [
-  "Make them easier",
-  "Make them harder",
-  "Make them shorter",
-  "Make them longer",
-  "Simplify the wording",
-  "Add more context to each question",
-  "Make the wrong options more tempting",
-  "Fix grammar and typos",
+const PRESETS: Array<{ label: string; instruction: string }> = [
+  {
+    label: "Shorten",
+    instruction:
+      "SHORTEN: cut the wording of every question stem and every answer option to the fewest words that still keep the question fully self-contained and answerable. Do not change the topic, the facts, or which option is correct.",
+  },
+  {
+    label: "Lengthen",
+    instruction:
+      "LENGTHEN: expand each question stem and each answer option with extra useful context and detail drawn from the source, so they read fuller and richer. Do not change the facts or which option is correct.",
+  },
+  {
+    label: "Ease",
+    instruction:
+      "EASE: make the questions easier — test the most obvious, directly stated facts, use plain everyday wording, and make the three wrong options clearly wrong. Keep the same topic for each question.",
+  },
+  {
+    label: "Harden",
+    instruction:
+      "HARDEN: make the questions harder — require reasoning, precise detail, or combining facts, and make the three wrong options genuinely plausible and closely related. Keep the same topic for each question and keep exactly one option correct.",
+  },
+  {
+    label: "More explicit",
+    instruction:
+      "MORE EXPLICIT: state everything needed directly in the question. Name the subject, period, and context outright, quote the relevant fact almost verbatim from the source, and remove any need to infer.",
+  },
+  {
+    label: "More implicit",
+    instruction:
+      "MORE IMPLICIT: stop restating the fact outright. Ask so the learner must infer or apply the underlying idea from the source rather than recall a sentence, while keeping enough context for the question to stand alone.",
+  },
 ];
 
 function EditDialog({
@@ -499,17 +568,17 @@ function EditDialog({
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p) => (
               <button
-                key={p}
+                key={p.label}
                 type="button"
-                onClick={() => toggle(p)}
+                onClick={() => toggle(p.instruction)}
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                  picks.includes(p)
+                  picks.includes(p.instruction)
                     ? "border-primary/60 bg-primary text-primary-foreground"
                     : "border-border bg-secondary/50 hover:bg-accent/60",
                 )}
               >
-                {t(p)}
+                {t(p.label)}
               </button>
             ))}
           </div>
