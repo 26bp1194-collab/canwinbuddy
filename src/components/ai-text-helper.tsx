@@ -172,7 +172,7 @@ export function AiTextHelper({
         data: {
           mode,
           instruction: instruction.trim() || "Refine the provided source text.",
-          existingText: mode === "refine-check" ? existing : "",
+          existingText: "",
         },
       });
       setPlanQs(questions.map((q) => ({ ...q, picks: [], custom: "" })));
