@@ -401,7 +401,16 @@ export function DifficultyControls({
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
+      {onReset && (
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+            <RotateCcw className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">{t("Reset")}</span>
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
+
         <button
           type="button"
           onClick={() => setSpec({ ...spec, mode: "simple" })}
