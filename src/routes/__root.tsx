@@ -30,6 +30,14 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => { reportLovableError(error, { boundary: "root" }); }, [error]);
+  // DOM-mutation crashes (browser translation/extensions removing React's text
+  // nodes) are recoverable: re-render the tree instead of showing a blank page.
+  useEffect(() => {
+    if (error instanceof Error && error.name === "NotFoundError" && /removeChild|insertBefore/.test(error.message)) {
+      const id = setTimeout(() => { router.invalidate(); reset(); }, 0);
+      return () => clearTimeout(id);
+    }
+  }, [error, router, reset]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -90,7 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark notranslate" translate="no">
       <head>
         <HeadContent />
       </head>
