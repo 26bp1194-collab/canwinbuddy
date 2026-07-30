@@ -229,7 +229,31 @@ function SettingsPage() {
             <ThemeOption active={form.theme === "light"} onClick={() => patch({ theme: "light" })} label={t("Light")} icon={<Sun className="h-4 w-4" />} />
           </div>
         </section>
+
+        <section className="panel p-4 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <RotateCcw className="h-4 w-4 shrink-0 text-primary" /> {t("Reset all")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Put every setting on this page back to the system default. You still need to save.")}
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-4 w-full sm:w-auto"
+            onClick={() =>
+              setForm({
+                appLanguage: "English",
+                theme: "dark",
+                planning: true,
+                defaults: DEFAULT_QUIZ_DEFAULTS,
+              })
+            }
+          >
+            <RotateCcw className="mr-2 h-4 w-4" /> {t("Reset all settings")}
+          </Button>
+        </section>
       </div>
+
 
       <AnimatePresence>
         {dirty && (
