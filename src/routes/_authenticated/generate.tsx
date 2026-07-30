@@ -319,7 +319,9 @@ function GeneratePage() {
                 setSpec={setSpec}
                 countText={countText}
                 setCountText={setCountText}
+                onReset={resetSettings}
               />
+
 
 
               <Button size="lg" onClick={run} className="w-full">
