@@ -20,7 +20,21 @@ const SUGGESTION_KEY = "cwb:next-quiz";
 export function QuizGame({ questions, onClose, title, guest = false }: Props) {
   const t = useT();
   const navigate = useNavigate();
-  const shuffled = useMemo(() => [...questions].sort(() => Math.random() - 0.5), [questions]);
+  const [seed, setSeed] = useState(0);
+  const shuffled = useMemo(() => {
+    void seed;
+    return [...questions]
+      .sort(() => Math.random() - 0.5)
+      .map((q) => {
+        /* Randomise answer positions so locations can't be memorised */
+        const order = q.choices.map((_, idx) => idx).sort(() => Math.random() - 0.5);
+        return {
+          ...q,
+          choices: order.map((idx) => q.choices[idx]),
+          correctIndex: Math.max(0, order.indexOf(q.correctIndex)),
+        };
+      });
+  }, [questions, seed]);
   const [i, setI] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
