@@ -76,11 +76,12 @@ function GeneratePage() {
       setTitle(draft.title);
       setCountText(String(draft.count));
       setDifficulty(draft.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec) });
+      /* Simple/Advanced is never restored — a new page always starts on Simple */
+      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" });
     } else {
       setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...defaults.spec });
+      setSpec({ ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" });
     }
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -99,15 +100,29 @@ function GeneratePage() {
     restored.current = true;
   }, [t]);
 
-  /* Persist the draft so navigating away never loses work — a blank page stays blank */
+  /* Persist the draft (text AND settings) so navigating away never loses work */
   useEffect(() => {
     if (!restored.current) return;
-    if (!source.trim() && !title.trim()) {
+    const d = getQuizDefaults();
+    const settingsAreDefault =
+      count === d.count &&
+      difficulty === d.difficulty &&
+      JSON.stringify({ ...spec, mode: "simple" }) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" });
+    if (!source.trim() && !title.trim() && settingsAreDefault) {
       clearDraft();
       return;
     }
     saveDraft({ source, title, count, difficulty, spec });
   }, [source, title, count, difficulty, spec]);
+
+  const resetSettings = () => {
+    const d = getQuizDefaults();
+    setCountText(String(d.count));
+    setDifficulty(d.difficulty);
+    setSpec({ ...DEFAULT_SPEC, ...d.spec, mode: spec.mode });
+    toast.success(t("Quiz settings reset to your defaults"));
+  };
+
 
 
   const useHelperText = (text: string) => {
