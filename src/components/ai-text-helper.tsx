@@ -33,6 +33,7 @@ type SavedHelper = {
   factCheck: boolean;
   customOn: boolean;
   custom: string;
+  brief: string;
   planQs: PlanQ[] | null;
   step: number;
   customPick: boolean;
@@ -63,6 +64,7 @@ export function AiTextHelper({
   const [factCheck, setFactCheck] = useState(false);
   const [customOn, setCustomOn] = useState(false);
   const [custom, setCustom] = useState("");
+  const [brief, setBrief] = useState("");
   const [planQs, setPlanQs] = useState<PlanQ[] | null>(null);
   const [step, setStep] = useState(0);
   const [customPick, setCustomPick] = useState(false);
@@ -86,6 +88,7 @@ export function AiTextHelper({
       setFactCheck(saved.factCheck);
       setCustomOn(saved.customOn);
       setCustom(saved.custom);
+      setBrief(saved.brief ?? "");
       setPlanQs(saved.planQs);
       setStep(saved.step);
       setCustomPick(saved.customPick);
@@ -98,6 +101,7 @@ export function AiTextHelper({
       setFactCheck(false);
       setCustomOn(false);
       setCustom("");
+      setBrief("");
       setPlanQs(null);
       setStep(0);
       setCustomPick(false);
@@ -109,8 +113,8 @@ export function AiTextHelper({
   /* Keep everything (including in-progress planning) for the next time it opens */
   useEffect(() => {
     if (!open || !hydrated.current) return;
-    saveHelperState({ mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result });
-  }, [open, mode, instruction, existing, improve, factCheck, customOn, custom, planQs, step, customPick, result]);
+    saveHelperState({ mode, instruction, existing, improve, factCheck, customOn, custom, brief, planQs, step, customPick, result });
+  }, [open, mode, instruction, existing, improve, factCheck, customOn, custom, brief, planQs, step, customPick, result]);
 
 
   const validInput = () => {
@@ -137,6 +141,7 @@ export function AiTextHelper({
           mode,
           instruction: instruction.trim() || "Refine the provided source text.",
           existingText: mode === "refine-check" ? existing : result,
+          brief: mode === "refine-check" ? brief.trim() : "",
           actions:
             mode === "refine-check"
               ? { improve, factCheck, custom: customOn ? custom.trim() : "" }
@@ -156,7 +161,8 @@ export function AiTextHelper({
 
   const start = async () => {
     if (!validInput()) return;
-    if (!planningEnabled || result) {
+    /* Refine & Check works on text the user already has — no planning questions */
+    if (!planningEnabled || result || mode === "refine-check") {
       void generate();
       return;
     }
@@ -166,7 +172,7 @@ export function AiTextHelper({
         data: {
           mode,
           instruction: instruction.trim() || "Refine the provided source text.",
-          existingText: mode === "refine-check" ? existing : "",
+          existingText: "",
         },
       });
       setPlanQs(questions.map((q) => ({ ...q, picks: [], custom: "" })));
@@ -200,6 +206,7 @@ export function AiTextHelper({
 
 
   const busy = loading || planning;
+  const resultWords = result.trim() ? result.trim().split(/\s+/).length : 0;
   const current = planQs?.[step];
 
   return (
@@ -308,7 +315,25 @@ export function AiTextHelper({
                     className="min-h-[140px]"
                   />
                 </div>
+                <div>
+                  <Label htmlFor="helper-brief" className="mb-2 block">
+                    {t("Brief description")} <span className="text-muted-foreground">({t("optional")})</span>
+                  </Label>
+                  <Textarea
+                    id="helper-brief"
+                    value={brief}
+                    onChange={(e) => setBrief(e.target.value)}
+                    placeholder={t("Briefly say what your text is about. Leave empty and the AI will read it and work it out itself.")}
+                    className="min-h-[70px]"
+                  />
+                </div>
                 <div className="space-y-3 rounded-xl border border-border bg-secondary/40 p-4">
+                  <CheckRow
+                    id="all"
+                    checked={improve && factCheck}
+                    onChange={(v) => { setImprove(v); setFactCheck(v); }}
+                    label={t("All")}
+                  />
                   <CheckRow id="improve" checked={improve} onChange={setImprove} label={t("Improve text")} />
                   <CheckRow id="factcheck" checked={factCheck} onChange={setFactCheck} label={t("Fact-check text")} />
                   <CheckRow id="custom" checked={customOn} onChange={setCustomOn} label={t("Custom")} />
@@ -326,7 +351,12 @@ export function AiTextHelper({
 
             {result && (
               <div>
-                <Label className="mb-2 block">{t("AI output")}</Label>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Label>{t("AI output")}</Label>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {resultWords.toLocaleString()} {resultWords === 1 ? t("word") : t("words")}
+                  </span>
+                </div>
                 <Textarea value={result} onChange={(e) => setResult(e.target.value)} className="min-h-[200px]" />
               </div>
             )}

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap } from "lucide-react";
+import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
@@ -76,11 +76,12 @@ function GeneratePage() {
       setTitle(draft.title);
       setCountText(String(draft.count));
       setDifficulty(draft.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec) });
+      /* Simple/Advanced is never restored — a new page always starts on Simple */
+      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" });
     } else {
       setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...defaults.spec });
+      setSpec({ ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" });
     }
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -99,15 +100,29 @@ function GeneratePage() {
     restored.current = true;
   }, [t]);
 
-  /* Persist the draft so navigating away never loses work — a blank page stays blank */
+  /* Persist the draft (text AND settings) so navigating away never loses work */
   useEffect(() => {
     if (!restored.current) return;
-    if (!source.trim() && !title.trim()) {
+    const d = getQuizDefaults();
+    const settingsAreDefault =
+      count === d.count &&
+      difficulty === d.difficulty &&
+      JSON.stringify({ ...spec, mode: "simple" }) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" });
+    if (!source.trim() && !title.trim() && settingsAreDefault) {
       clearDraft();
       return;
     }
     saveDraft({ source, title, count, difficulty, spec });
   }, [source, title, count, difficulty, spec]);
+
+  const resetSettings = () => {
+    const d = getQuizDefaults();
+    setCountText(String(d.count));
+    setDifficulty(d.difficulty);
+    setSpec({ ...DEFAULT_SPEC, ...d.spec, mode: spec.mode });
+    toast.success(t("Quiz settings reset to your defaults"));
+  };
+
 
 
   const useHelperText = (text: string) => {
@@ -304,7 +319,9 @@ function GeneratePage() {
                 setSpec={setSpec}
                 countText={countText}
                 setCountText={setCountText}
+                onReset={resetSettings}
               />
+
 
 
               <Button size="lg" onClick={run} className="w-full">
@@ -337,6 +354,7 @@ export function DifficultyControls({
   setSpec,
   countText,
   setCountText,
+  onReset,
 }: {
   difficulty: Difficulty;
   setDifficulty: (d: Difficulty) => void;
@@ -344,6 +362,7 @@ export function DifficultyControls({
   setSpec: (s: StyleSpec) => void;
   countText: string;
   setCountText: (v: string) => void;
+  onReset?: () => void;
 }) {
   const t = useT();
   const advanced = spec.mode === "advanced";
@@ -382,7 +401,16 @@ export function DifficultyControls({
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
+      {onReset && (
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+            <RotateCcw className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">{t("Reset")}</span>
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
+
         <button
           type="button"
           onClick={() => setSpec({ ...spec, mode: "simple" })}
@@ -428,7 +456,6 @@ export function DifficultyControls({
       ) : (
         <div className="space-y-4">
           {countField}
-          {difficultyField}
           <div className="grid grid-cols-2 gap-3">
             <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
             <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
