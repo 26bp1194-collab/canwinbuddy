@@ -442,11 +442,14 @@ export const aiTextHelper = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => TextHelperInput.parse(raw))
   .handler(async ({ data }) => {
-    const { mode, instruction, existingText, actions, planAnswers } = data;
+    const { mode, instruction, existingText, actions, planAnswers, brief } = data;
+
+    const VOLUME = `- The text must be rich enough to write at least 100 distinct multiple-choice quiz questions from it. Aim for 1200+ words packed with separate, testable facts (definitions, dates, names, numbers, causes, effects, examples, comparisons). Never pad with filler or repetition — every sentence should add new testable information.`;
 
     const base = `You are a writing assistant that produces study/reference text suitable for generating quiz questions from. Rules:
 - Return ONLY the finished text as plain prose. No preamble, no markdown headers, no commentary, no quotes.
 - Prefer clear factual sentences, concrete details, definitions, dates, names, numbers.
+${VOLUME}
 ${MATH_RULES}`;
 
     let system: string;
@@ -468,10 +471,32 @@ ${MATH_RULES}`;
       if (actions?.custom?.trim()) asked.push(`Custom instruction from the user: ${actions.custom.trim()}`);
       if (asked.length === 0) asked.push("Improve the text for clarity and factual accuracy.");
 
+      /* Use the user's brief when given; otherwise have the AI summarise the text first */
+      let context = brief?.trim() ?? "";
+      if (!context && existingText.trim()) {
+        context =
+          (
+            await callAI(
+              [
+                {
+                  role: "system",
+                  content:
+                    "Summarise what the following text is about in 2-3 sentences. Name the subject, scope and purpose. Return only the summary.",
+                },
+                { role: "user", content: existingText.slice(0, 20000) },
+              ],
+              false,
+            )
+          )?.trim() ?? "";
+      }
+
       system = `${base}
 - You are in REFINE & CHECK mode: rewrite the user's existing source text according to the requested actions while preserving its meaning and all accurate facts.
-- Return the full rewritten text, not a diff or a summary.`;
-      user = `Requested actions:\n${asked.map((a) => `- ${a}`).join("\n")}\n\nAdditional context: ${instruction}${planBlock(
+- Return the full rewritten text, not a diff or a summary.
+- Expand the text with further accurate, closely related detail where needed so it can support at least 100 quiz questions.`;
+      user = `What this text is about: ${context || "(not provided)"}\n\nRequested actions:\n${asked
+        .map((a) => `- ${a}`)
+        .join("\n")}\n\nAdditional context: ${instruction}${planBlock(
         planAnswers,
       )}\n\nYOUR SOURCE TEXT:\n"""${existingText}"""`;
     }
@@ -487,6 +512,7 @@ ${MATH_RULES}`;
     if (!text) throw new Error("No text returned");
     return { text };
   });
+
 
 /* ---------------- Planning questions ---------------- */
 
