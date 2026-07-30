@@ -96,6 +96,7 @@ export function QuizGame({ questions, onClose, title, guest = false }: Props) {
     setSelected(null);
     setFinished(false);
     setCoach(null);
+    setSeed((s) => s + 1);
   };
 
   return (
