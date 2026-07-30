@@ -629,7 +629,7 @@ export const editQuestions = createServerFn({ method: "POST" })
 
 ${SELF_CONTAINED}
 ${MATH_RULES}${styleBlock(spec)}`;
-    const user = `Requested changes:\n${asks.join("\n") || "- Improve the questions"}\n\nQUESTIONS TO REWRITE:\n${JSON.stringify(
+    const user = `Apply EVERY requested change below literally and completely, to every question:\n${asks.join("\n") || "- Improve the questions"}\n\nQUESTIONS TO REWRITE:\n${JSON.stringify(
       questions,
     )}${sourceText ? `\n\nSOURCE:\n"""${sourceText.slice(0, 30000)}"""` : ""}`;
     const raw = await callAI([
