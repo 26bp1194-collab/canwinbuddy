@@ -354,6 +354,7 @@ export function DifficultyControls({
   setSpec,
   countText,
   setCountText,
+  onReset,
 }: {
   difficulty: Difficulty;
   setDifficulty: (d: Difficulty) => void;
@@ -361,6 +362,7 @@ export function DifficultyControls({
   setSpec: (s: StyleSpec) => void;
   countText: string;
   setCountText: (v: string) => void;
+  onReset?: () => void;
 }) {
   const t = useT();
   const advanced = spec.mode === "advanced";
