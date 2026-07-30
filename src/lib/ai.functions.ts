@@ -427,6 +427,7 @@ const TextHelperInput = z.object({
       custom: z.string().max(2000).optional().default(""),
     })
     .optional(),
+  brief: z.string().max(2000).optional().default(""),
   planAnswers: z.array(z.object({ question: z.string(), answer: z.string() })).max(10).optional(),
 });
 
