@@ -33,9 +33,7 @@ function PlaySharedPage() {
     queryKey: ["share", id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("quiz_shares")
-        .select("title, questions, question_count")
-        .eq("id", id)
+        .rpc("get_shared_quiz", { share_id: id })
         .maybeSingle();
       if (error) throw error;
       return data;
