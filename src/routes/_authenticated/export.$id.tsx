@@ -280,7 +280,11 @@ function ExportPage() {
               <span className="hidden sm:inline">{t("Share")}</span>
 
             </Button>
+            <Button variant="secondary" onClick={() => setProgressiveOpen(true)} aria-label={t("New quiz")}>
+              <Sparkles className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("New quiz")}</span>
+            </Button>
           </div>
+
         </div>
 
         <p className="mt-5 text-xs uppercase tracking-wider text-muted-foreground">{t("Format")}</p>
