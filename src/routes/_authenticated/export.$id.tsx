@@ -45,6 +45,8 @@ const LANGUAGES = [
 function ExportPage() {
   const { id } = Route.useParams();
   const t = useT();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [platform, setPlatform] = useState<Platform>("blooket");
   const [language, setLanguage] = useState<string>("English");
   const [translated, setTranslated] = useState<Record<string, Question[]>>({});
@@ -55,9 +57,11 @@ function ExportPage() {
   const [explainIndex, setExplainIndex] = useState<number | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [progressiveOpen, setProgressiveOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const qc = useQueryClient();
+
 
 
 
