@@ -92,11 +92,17 @@ function GeneratePage() {
       setCountText(String(draft.count));
       setDifficulty(draft.difficulty);
       /* Simple/Advanced is never restored — a new page always starts on Simple */
-      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" });
+      setSpecs({
+        simple: { ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" },
+        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+      });
     } else {
       setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" });
+      setSpecs({
+        simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
+        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+      });
     }
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -134,9 +140,13 @@ function GeneratePage() {
     const d = getQuizDefaults();
     setCountText(String(d.count));
     setDifficulty(d.difficulty);
-    setSpec({ ...DEFAULT_SPEC, ...d.spec, mode: spec.mode });
+    setSpecs({
+      simple: { ...DEFAULT_SPEC, ...d.spec, mode: "simple" },
+      advanced: { ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" },
+    });
     toast.success(t("Quiz settings reset to your defaults"));
   };
+
 
 
 
