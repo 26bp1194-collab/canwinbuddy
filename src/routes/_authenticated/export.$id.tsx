@@ -168,6 +168,33 @@ function ExportPage() {
     await qc.invalidateQueries({ queryKey: ["quiz-set", id] });
   };
 
+  /* Progressive quiz — builds a brand new set from this one */
+  const makeProgressive = async (instruction: string, presets: string[]) => {
+    const { questions: out } = await editQuestions({
+      data: {
+        sourceText: (data?.source_text as string) ?? "",
+        questions: original,
+        instruction,
+        presets,
+      },
+    });
+    const next = out.length ? out : original;
+    const { data: inserted, error } = await supabase
+      .from("quiz_sets")
+      .insert({
+        user_id: user!.id,
+        title: `${data!.title} — ${t("next round")}`,
+        source_text: (data?.source_text as string) ?? "",
+        questions: JSON.parse(JSON.stringify(next)),
+        question_count: next.length,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    await qc.invalidateQueries({ queryKey: ["history"] });
+    navigate({ to: "/export/$id", params: { id: inserted.id } });
+  };
+
   const toggleRow = (i: number) =>
     setSelected((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]));
 
@@ -177,7 +204,8 @@ function ExportPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {t("New quiz")}
+        <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
+
       </Link>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
