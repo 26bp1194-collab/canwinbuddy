@@ -232,19 +232,53 @@ function HistoryPage() {
           {groups.map((g) => {
             const ids = idsInGroup(g.id);
             return (
-              <Link
-                key={g.id}
-                to="/group/$id"
-                params={{ id: g.id }}
-                className="panel flex items-center gap-2 p-4 transition-colors hover:bg-accent/40"
-              >
-                <Folder className="h-4 w-4 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </Link>
+              <div key={g.id} className="panel flex items-center gap-1 p-2 pl-4 transition-colors hover:bg-accent/40 sm:gap-2 sm:p-4">
+                <Link
+                  to="/group/$id"
+                  params={{ id: g.id }}
+                  className="flex min-w-0 flex-1 items-center gap-2 py-2"
+                >
+                  <Folder className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
+                  <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={g.is_favorite ? t("Unfavourite group") : t("Favourite group")}
+                  onClick={() => toggleFavorite.mutate({ id: g.id, value: !g.is_favorite })}
+                >
+                  <Star className={g.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${g.name}`}>
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel className="max-w-[220px] truncate">{g.name}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setRenameFor({ id: g.id, name: g.name })}>
+                      <Pencil className="mr-2 h-4 w-4" /> {t("Change name")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setAddQuizFor({ id: g.id, name: g.name })}>
+                      <Plus className="mr-2 h-4 w-4" /> {t("Add quiz")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void startPlayAll(g)}>
+                      <Play className="mr-2 h-4 w-4" /> {t("Play all")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive" onSelect={() => deleteGroup.mutate(g.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> {t("Delete group")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             );
           })}
+
         </div>
       )}
 
