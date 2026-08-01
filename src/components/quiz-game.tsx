@@ -7,7 +7,6 @@ import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
-
 interface Props {
   questions: Question[];
   onClose: () => void;
@@ -15,11 +14,8 @@ interface Props {
   guest?: boolean;
 }
 
-const SUGGESTION_KEY = "cwb:next-quiz";
-
-export function QuizGame({ questions, onClose, title, guest = false }: Props) {
+export function QuizGame({ questions, onClose, title }: Props) {
   const t = useT();
-  const navigate = useNavigate();
   const [seed, setSeed] = useState(0);
   const shuffled = useMemo(() => {
     void seed;
@@ -38,10 +34,7 @@ export function QuizGame({ questions, onClose, title, guest = false }: Props) {
   const [i, setI] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
-  const [missed, setMissed] = useState<Array<{ question: string; correct: string }>>([]);
   const [finished, setFinished] = useState(false);
-  const [coach, setCoach] = useState<{ feedback: string; suggestionTitle: string; suggestionTopic: string } | null>(null);
-  const [coachLoading, setCoachLoading] = useState(false);
 
   const q = shuffled[i];
   const progress = ((i + (selected !== null ? 1 : 0)) / shuffled.length) * 100;
@@ -50,52 +43,22 @@ export function QuizGame({ questions, onClose, title, guest = false }: Props) {
     if (selected !== null) return;
     setSelected(idx);
     if (idx === q.correctIndex) setScore((s) => s + 1);
-    else setMissed((m) => [...m, { question: q.question, correct: q.choices[q.correctIndex] }]);
   };
-
-  const finish = async (finalScore: number, finalMissed: Array<{ question: string; correct: string }>) => {
-    setFinished(true);
-    if (guest) return;
-    setCoachLoading(true);
-    try {
-      const res = await quizFeedback({
-        data: { title, score: finalScore, total: shuffled.length, missed: finalMissed },
-      });
-      setCoach(res);
-    } catch {
-      setCoach(null);
-    } finally {
-      setCoachLoading(false);
-    }
-  };
-
 
   const next = () => {
     if (i + 1 >= shuffled.length) {
-      void finish(score, missed);
+      setFinished(true);
     } else {
       setI((n) => n + 1);
       setSelected(null);
     }
   };
 
-  const acceptSuggestion = () => {
-    if (!coach) return;
-    window.localStorage.setItem(
-      SUGGESTION_KEY,
-      JSON.stringify({ title: coach.suggestionTitle, topic: coach.suggestionTopic }),
-    );
-    onClose();
-    navigate({ to: "/generate" });
-  };
-
   const replay = () => {
     setI(0);
     setScore(0);
-    setMissed([]);
     setSelected(null);
     setFinished(false);
-    setCoach(null);
     setSeed((s) => s + 1);
   };
 
@@ -128,31 +91,6 @@ export function QuizGame({ questions, onClose, title, guest = false }: Props) {
             <p className="mt-1 text-sm text-muted-foreground">
               {Math.round((score / shuffled.length) * 100)}% {t("correct")}
             </p>
-
-            <div className="mt-6 rounded-xl border border-border bg-secondary/40 p-4 text-left">
-              <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                <MessageSquare className="h-4 w-4 text-primary" /> {t("AI feedback")}
-              </p>
-              {coachLoading ? (
-                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Reviewing your answers…")}
-                </p>
-              ) : coach ? (
-                <>
-                  <p className="mt-2 text-sm leading-relaxed">{coach.feedback}</p>
-                  <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3">
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Suggested next quiz")}</p>
-                    <p className="mt-1 text-sm font-medium">{coach.suggestionTitle}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{coach.suggestionTopic}</p>
-                    <Button size="sm" className="mt-3 w-full sm:w-auto" onClick={acceptSuggestion}>
-                      <Sparkles className="mr-2 h-4 w-4" /> {t("Generate this quiz")}
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">{t("Feedback unavailable right now.")}</p>
-              )}
-            </div>
 
             <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
               <Button onClick={replay}>{t("Play again")}</Button>
