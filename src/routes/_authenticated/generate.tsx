@@ -18,6 +18,8 @@ import {
   saveDraft,
   saveTimings,
   DEFAULT_SPEC,
+  DEFAULT_SPEC_ADVANCED,
+
   type Difficulty,
   type StepTiming,
   type StyleSpec,
