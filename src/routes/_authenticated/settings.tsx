@@ -184,18 +184,21 @@ function SettingsPage() {
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <SlidersHorizontal className="h-4 w-4 shrink-0 text-primary" /> {t("Quiz defaults")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("Used every time you start a new quiz.")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Used every time you start a new quiz. Simple and Advanced keep their own defaults.")}
+          </p>
 
           <div className="mt-4">
             <DifficultyControls
               difficulty={form.defaults.difficulty}
               setDifficulty={(d) => patchDefaults({ difficulty: d })}
-              spec={form.defaults.spec}
-              setSpec={(s) => patchDefaults({ spec: s })}
+              spec={editingSpec}
+              setSpec={setEditingSpec}
               countText={String(form.defaults.count)}
               setCountText={(v) => patchDefaults({ count: Math.max(1, Math.min(100, Number(v) || 1)) })}
             />
           </div>
+
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
