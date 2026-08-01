@@ -57,7 +57,10 @@ function HistoryPage() {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [assignFor, setAssignFor] = useState<Row | null>(null);
-  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [renameFor, setRenameFor] = useState<{ id: string; name: string } | null>(null);
+  const [addQuizFor, setAddQuizFor] = useState<{ id: string; name: string } | null>(null);
+  const [playAll, setPlayAll] = useState<{ name: string; questions: Question[] } | null>(null);
+
 
 
 
