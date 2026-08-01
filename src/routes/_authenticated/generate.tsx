@@ -57,7 +57,20 @@ function GeneratePage() {
   const count = Math.max(1, Math.min(100, Number(countText) || 1));
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [spec, setSpec] = useState<StyleSpec>(DEFAULT_SPEC);
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [specs, setSpecs] = useState<{ simple: StyleSpec; advanced: StyleSpec }>({
+    simple: DEFAULT_SPEC,
+    advanced: DEFAULT_SPEC_ADVANCED,
+  });
+  const spec: StyleSpec = { ...specs[mode], mode };
+  const setSpec = (next: StyleSpec) => {
+    if (next.mode !== mode) {
+      setMode(next.mode);
+      return;
+    }
+    setSpecs((s) => ({ ...s, [mode]: { ...next, mode } }));
+  };
+
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [timings, setTimings] = useState<StepTiming[]>([]);
