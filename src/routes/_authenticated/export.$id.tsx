@@ -261,7 +261,7 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-2 sm:flex">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             <Button onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
@@ -278,6 +278,7 @@ function ExportPage() {
             <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
               {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{t("Share")}</span>
+
             </Button>
           </div>
         </div>
