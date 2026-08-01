@@ -41,7 +41,6 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 type Form = {
   appLanguage: string;
-  theme: "dark" | "light";
   planning: boolean;
   defaults: QuizDefaults;
 };
@@ -54,12 +53,14 @@ function SettingsPage() {
 
   const [saved, setSaved] = useState<Form | null>(null);
   const [form, setForm] = useState<Form | null>(null);
+  /* Simple/Advanced is just a view switch — it is never part of the saved settings */
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [confirmReset, setConfirmReset] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
     const current: Form = {
       appLanguage: language,
-      theme: theme === "light" ? "light" : "dark",
       planning: getPlanningEnabled(),
       defaults: getQuizDefaults(),
     };
@@ -69,6 +70,12 @@ function SettingsPage() {
     hydrated.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!confirmReset) return;
+    const id = window.setTimeout(() => setConfirmReset(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [confirmReset]);
 
   const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
@@ -84,10 +91,23 @@ function SettingsPage() {
   const patch = (p: Partial<Form>) => setForm((f) => ({ ...f!, ...p }));
   const patchDefaults = (p: Partial<QuizDefaults>) => setForm((f) => ({ ...f!, defaults: { ...f!.defaults, ...p } }));
 
+  const editingSpec: StyleSpec =
+    mode === "simple"
+      ? { ...form.defaults.spec, mode: "simple" }
+      : { ...form.defaults.specAdvanced, mode: "advanced" };
+
+  const setEditingSpec = (next: StyleSpec) => {
+    if (next.mode !== mode) {
+      setMode(next.mode);
+      return;
+    }
+    if (mode === "simple") patchDefaults({ spec: { ...next, mode: "simple" } });
+    else patchDefaults({ specAdvanced: { ...next, mode: "advanced" } });
+  };
+
   const save = () => {
     setQuizDefaults(form.defaults);
     setPlanningEnabledValue(form.planning);
-    if (form.theme !== theme) setTheme(form.theme);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
     clearSettingsDraft();
@@ -99,11 +119,19 @@ function SettingsPage() {
     clearSettingsDraft();
   };
 
+  const resetAll = () => {
+    setForm({ appLanguage: "English", planning: true, defaults: DEFAULT_QUIZ_DEFAULTS });
+    setTheme("dark");
+    setConfirmReset(false);
+    toast.success(t("Everything is back to the system default — save to keep it."));
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     toast.success(t("Logged out"));
     navigate({ to: "/auth" });
   };
+
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-40 sm:px-8 sm:py-10 md:pb-32">
