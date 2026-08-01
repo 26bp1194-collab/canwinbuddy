@@ -16,6 +16,8 @@ import {
   setQuizDefaults,
   DEFAULT_QUIZ_DEFAULTS,
   type QuizDefaults,
+  type StyleSpec,
+
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
