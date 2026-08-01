@@ -1,0 +1,1 @@
+ALTER TABLE public.quiz_groups ADD COLUMN IF NOT EXISTS is_favorite boolean NOT NULL DEFAULT false;

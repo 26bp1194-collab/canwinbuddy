@@ -18,6 +18,8 @@ import {
   saveDraft,
   saveTimings,
   DEFAULT_SPEC,
+  DEFAULT_SPEC_ADVANCED,
+
   type Difficulty,
   type StepTiming,
   type StyleSpec,
@@ -57,7 +59,20 @@ function GeneratePage() {
   const count = Math.max(1, Math.min(100, Number(countText) || 1));
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [spec, setSpec] = useState<StyleSpec>(DEFAULT_SPEC);
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [specs, setSpecs] = useState<{ simple: StyleSpec; advanced: StyleSpec }>({
+    simple: DEFAULT_SPEC,
+    advanced: DEFAULT_SPEC_ADVANCED,
+  });
+  const spec: StyleSpec = { ...specs[mode], mode };
+  const setSpec = (next: StyleSpec) => {
+    if (next.mode !== mode) {
+      setMode(next.mode);
+      return;
+    }
+    setSpecs((s) => ({ ...s, [mode]: { ...next, mode } }));
+  };
+
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [timings, setTimings] = useState<StepTiming[]>([]);
@@ -77,11 +92,17 @@ function GeneratePage() {
       setCountText(String(draft.count));
       setDifficulty(draft.difficulty);
       /* Simple/Advanced is never restored — a new page always starts on Simple */
-      setSpec({ ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" });
+      setSpecs({
+        simple: { ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" },
+        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+      });
     } else {
       setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
-      setSpec({ ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" });
+      setSpecs({
+        simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
+        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+      });
     }
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -119,9 +140,13 @@ function GeneratePage() {
     const d = getQuizDefaults();
     setCountText(String(d.count));
     setDifficulty(d.difficulty);
-    setSpec({ ...DEFAULT_SPEC, ...d.spec, mode: spec.mode });
+    setSpecs({
+      simple: { ...DEFAULT_SPEC, ...d.spec, mode: "simple" },
+      advanced: { ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" },
+    });
     toast.success(t("Quiz settings reset to your defaults"));
   };
+
 
 
 

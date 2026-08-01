@@ -1,17 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight, Star, Pencil, Play, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import type { Question } from "@/lib/ai.functions";
+import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+
 
 import { useT } from "@/lib/i18n";
 import {
@@ -54,7 +57,10 @@ function HistoryPage() {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [assignFor, setAssignFor] = useState<Row | null>(null);
-  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [renameFor, setRenameFor] = useState<{ id: string; name: string } | null>(null);
+  const [addQuizFor, setAddQuizFor] = useState<{ id: string; name: string } | null>(null);
+  const [playAll, setPlayAll] = useState<{ name: string; questions: Question[] } | null>(null);
+
 
 
 
@@ -77,8 +83,10 @@ function HistoryPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_groups")
-        .select("id, name, created_at")
+        .select("id, name, created_at, is_favorite")
+        .order("is_favorite", { ascending: false })
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       return data;
     },
@@ -124,6 +132,7 @@ function HistoryPage() {
 
   const deleteGroup = useMutation({
     mutationFn: async (id: string) => {
+      await supabase.from("quiz_group_items").delete().eq("group_id", id);
       const { error } = await supabase.from("quiz_groups").delete().eq("id", id);
       if (error) throw error;
     },
@@ -132,7 +141,50 @@ function HistoryPage() {
       qc.invalidateQueries({ queryKey: ["group-items"] });
       toast.success(t("Group deleted"));
     },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not delete group"),
   });
+
+  const renameGroup = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("quiz_groups").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["groups"] });
+      setRenameFor(null);
+      toast.success(t("Group renamed"));
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not rename group"),
+  });
+
+  const toggleFavorite = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("quiz_groups").update({ is_favorite: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["groups"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update group"),
+  });
+
+  const startPlayAll = async (group: { id: string; name: string }) => {
+    const ids = idsInGroup(group.id);
+    if (!ids.length) {
+      toast.error(t("This group has no quizzes yet."));
+      return;
+    }
+    const { data: sets, error } = await supabase.from("quiz_sets").select("questions").in("id", ids);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const questions = (sets ?? []).flatMap((s) => (s.questions as unknown as Question[]) ?? []);
+    if (!questions.length) {
+      toast.error(t("This group has no questions yet."));
+      return;
+    }
+    setPlayAll({ name: group.name, questions });
+  };
+
 
   const toggleMembership = useMutation({
     mutationFn: async ({ groupId, quizId, member }: { groupId: string; quizId: string; member: boolean }) => {
@@ -180,19 +232,53 @@ function HistoryPage() {
           {groups.map((g) => {
             const ids = idsInGroup(g.id);
             return (
-              <Link
-                key={g.id}
-                to="/group/$id"
-                params={{ id: g.id }}
-                className="panel flex items-center gap-2 p-4 transition-colors hover:bg-accent/40"
-              >
-                <Folder className="h-4 w-4 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </Link>
+              <div key={g.id} className="panel flex items-center gap-1 p-2 pl-4 transition-colors hover:bg-accent/40 sm:gap-2 sm:p-4">
+                <Link
+                  to="/group/$id"
+                  params={{ id: g.id }}
+                  className="flex min-w-0 flex-1 items-center gap-2 py-2"
+                >
+                  <Folder className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{ids.length} {t("quizzes")}</span>
+                  <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={g.is_favorite ? t("Unfavourite group") : t("Favourite group")}
+                  onClick={() => toggleFavorite.mutate({ id: g.id, value: !g.is_favorite })}
+                >
+                  <Star className={g.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${g.name}`}>
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel className="max-w-[220px] truncate">{g.name}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setRenameFor({ id: g.id, name: g.name })}>
+                      <Pencil className="mr-2 h-4 w-4" /> {t("Change name")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setAddQuizFor({ id: g.id, name: g.name })}>
+                      <Plus className="mr-2 h-4 w-4" /> {t("Add quiz")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void startPlayAll(g)}>
+                      <Play className="mr-2 h-4 w-4" /> {t("Play all")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive" onSelect={() => deleteGroup.mutate(g.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> {t("Delete group")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             );
           })}
+
         </div>
       )}
 
@@ -307,6 +393,71 @@ function HistoryPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!renameFor} onOpenChange={(v) => !v && setRenameFor(null)}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-sm p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">{t("Change name")}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{t("Give this group a new name.")}</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameFor?.name ?? ""}
+            onChange={(e) => setRenameFor((r) => (r ? { ...r, name: e.target.value } : r))}
+            onKeyDown={(e) =>
+              e.key === "Enter" && renameFor?.name.trim() && renameGroup.mutate({ id: renameFor.id, name: renameFor.name.trim() })
+            }
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setRenameFor(null)}>{t("Cancel")}</Button>
+            <Button
+              disabled={!renameFor?.name.trim() || renameGroup.isPending}
+              onClick={() => renameFor && renameGroup.mutate({ id: renameFor.id, name: renameFor.name.trim() })}
+            >
+              {t("Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!addQuizFor} onOpenChange={(v) => !v && setAddQuizFor(null)}>
+        <DialogContent className="max-h-[80vh] w-[calc(100vw-1.5rem)] max-w-sm overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">{t("Add quiz")}</DialogTitle>
+            <DialogDescription className="break-words text-xs sm:text-sm">{addQuizFor?.name}</DialogDescription>
+          </DialogHeader>
+          {!data?.length ? (
+            <p className="text-sm text-muted-foreground">{t("No history yet")}</p>
+          ) : (
+            <div className="space-y-3">
+              {data.map((row) => {
+                const member = addQuizFor ? idsInGroup(addQuizFor.id).includes(row.id) : false;
+                return (
+                  <div key={row.id} className="flex items-center gap-3">
+                    <Checkbox
+                      id={`aq-${row.id}`}
+                      checked={member}
+                      onCheckedChange={() =>
+                        addQuizFor && toggleMembership.mutate({ groupId: addQuizFor.id, quizId: row.id, member })
+                      }
+                    />
+                    <Label htmlFor={`aq-${row.id}`} className="min-w-0 cursor-pointer truncate text-sm font-medium">
+                      {row.title}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setAddQuizFor(null)}>{t("Done")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AnimatePresence>
+        {playAll && (
+          <QuizGame questions={playAll.questions} title={playAll.name} onClose={() => setPlayAll(null)} />
+        )}
+      </AnimatePresence>
 
 
     </div>

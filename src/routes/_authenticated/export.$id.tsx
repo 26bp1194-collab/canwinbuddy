@@ -1,11 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import { translateQuestions, explainAnswer, editQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { formatMs, getQuizDefaults, getTimings, type StepTiming } from "@/lib/prefs";
@@ -18,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 
 
 export const Route = createFileRoute("/_authenticated/export/$id")({
@@ -43,6 +45,8 @@ const LANGUAGES = [
 function ExportPage() {
   const { id } = Route.useParams();
   const t = useT();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [platform, setPlatform] = useState<Platform>("blooket");
   const [language, setLanguage] = useState<string>("English");
   const [translated, setTranslated] = useState<Record<string, Question[]>>({});
@@ -53,9 +57,11 @@ function ExportPage() {
   const [explainIndex, setExplainIndex] = useState<number | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [progressiveOpen, setProgressiveOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const qc = useQueryClient();
+
 
 
 
@@ -162,6 +168,33 @@ function ExportPage() {
     await qc.invalidateQueries({ queryKey: ["quiz-set", id] });
   };
 
+  /* Progressive quiz — builds a brand new set from this one */
+  const makeProgressive = async (instruction: string, presets: string[]) => {
+    const { questions: out } = await editQuestions({
+      data: {
+        sourceText: (data?.source_text as string) ?? "",
+        questions: original,
+        instruction,
+        presets,
+      },
+    });
+    const next = out.length ? out : original;
+    const { data: inserted, error } = await supabase
+      .from("quiz_sets")
+      .insert({
+        user_id: user!.id,
+        title: `${data!.title} — ${t("next round")}`,
+        source_text: (data?.source_text as string) ?? "",
+        questions: JSON.parse(JSON.stringify(next)),
+        question_count: next.length,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    await qc.invalidateQueries({ queryKey: ["history"] });
+    navigate({ to: "/export/$id", params: { id: inserted.id } });
+  };
+
   const toggleRow = (i: number) =>
     setSelected((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]));
 
@@ -171,7 +204,8 @@ function ExportPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {t("New quiz")}
+        <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
+
       </Link>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
@@ -227,7 +261,7 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-2 sm:flex">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             <Button onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
@@ -244,8 +278,13 @@ function ExportPage() {
             <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
               {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{t("Share")}</span>
+
+            </Button>
+            <Button variant="secondary" onClick={() => setProgressiveOpen(true)} aria-label={t("New quiz")}>
+              <Sparkles className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("New quiz")}</span>
             </Button>
           </div>
+
         </div>
 
         <p className="mt-5 text-xs uppercase tracking-wider text-muted-foreground">{t("Format")}</p>
@@ -320,7 +359,14 @@ function ExportPage() {
         }}
       />
 
+      <ProgressiveDialog
+        open={progressiveOpen}
+        onOpenChange={setProgressiveOpen}
+        onApply={makeProgressive}
+      />
+
       <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} sourceText={(data.source_text as string) ?? ""} />
+
 
       <ExplainDialog
         question={explainIndex !== null ? questions[explainIndex] : null}
@@ -597,6 +643,110 @@ function EditDialog({
           <Button onClick={run} disabled={busy}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
             {t("Apply changes")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PROGRESSIVE_PRESETS: Array<{ label: string; instruction: string }> = [
+  {
+    label: "Easier",
+    instruction:
+      "EASIER: the new set must test the most obvious, directly stated facts, use plain everyday wording, and make the three wrong options clearly wrong.",
+  },
+  {
+    label: "Harder",
+    instruction:
+      "HARDER: the new set must require reasoning, precise detail, or combining facts, and the three wrong options must be genuinely plausible and closely related.",
+  },
+  {
+    label: "Same level",
+    instruction: "SAME LEVEL: keep the same difficulty as the current set.",
+  },
+];
+
+function ProgressiveDialog({
+  open,
+  onOpenChange,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onApply: (instruction: string, presets: string[]) => Promise<void>;
+}) {
+  const t = useT();
+  const [pick, setPick] = useState<string>(PROGRESSIVE_PRESETS[1].instruction);
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPick(PROGRESSIVE_PRESETS[1].instruction);
+      setPrompt("");
+    }
+  }, [open]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      await onApply(
+        `${t("Build a follow-up quiz on the same source. Every question must be freshly worded and must not repeat the current questions.")} ${prompt.trim()}`.trim(),
+        [pick],
+      );
+      toast.success(t("New quiz created"));
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't create the new quiz"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
+      <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">{t("New quiz")}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            {t("Make a follow-up quiz from this one. Pick a difficulty change and add a comment if you want.")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {PROGRESSIVE_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => setPick(p.instruction)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  pick === p.instruction
+                    ? "border-primary/60 bg-primary text-primary-foreground"
+                    : "border-border bg-secondary/50 hover:bg-accent/60",
+                )}
+              >
+                {t(p.label)}
+              </button>
+            ))}
+          </div>
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t("Optional — tell the AI how you want the next quiz, e.g. focus on the parts I got wrong.")}
+            className="min-h-[100px]"
+          />
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy} className="w-full sm:w-auto">
+            {t("Cancel")}
+          </Button>
+          <Button onClick={run} disabled={busy}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {t("Create quiz")}
           </Button>
         </DialogFooter>
       </DialogContent>

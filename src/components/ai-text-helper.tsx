@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight } from "lucide-react";
+import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { aiTextHelper, planTextQuestions } from "@/lib/ai.functions";
@@ -397,11 +397,26 @@ export function AiTextHelper({
             ) : (
               <>
                 {result && (
-                  <Button variant="secondary" onClick={() => generate()} disabled={busy}>
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                    {t("Change more")}
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setResult("");
+                        setPlanQs(null);
+                        setStep(0);
+                        setCustomPick(false);
+                      }}
+                      disabled={busy}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> {t("New source")}
+                    </Button>
+                    <Button variant="secondary" onClick={() => generate()} disabled={busy}>
+                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                      {t("Change more")}
+                    </Button>
+                  </>
                 )}
+
                 {!result ? (
                   <Button onClick={start} disabled={busy}>
                     {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}

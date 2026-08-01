@@ -98,12 +98,17 @@ export const DEFAULT_SPEC: StyleSpec = {
   obscurity: 3,
 };
 
+export const DEFAULT_SPEC_ADVANCED: StyleSpec = { ...DEFAULT_SPEC, mode: "advanced" };
+
 export type QuizDefaults = {
   count: number;
   difficulty: Difficulty;
   platform: "blooket" | "gimkit" | "gimkit2" | "kahoot";
   language: string;
+  /** Defaults used while the Generate page is on Simple */
   spec: StyleSpec;
+  /** Defaults used while the Generate page is on Advanced */
+  specAdvanced: StyleSpec;
 };
 
 export const DEFAULT_QUIZ_DEFAULTS: QuizDefaults = {
@@ -112,6 +117,7 @@ export const DEFAULT_QUIZ_DEFAULTS: QuizDefaults = {
   platform: "blooket",
   language: "English",
   spec: DEFAULT_SPEC,
+  specAdvanced: DEFAULT_SPEC_ADVANCED,
 };
 
 
@@ -121,7 +127,14 @@ export function getQuizDefaults(): QuizDefaults {
     const raw = window.localStorage.getItem(DEFAULTS_KEY);
     if (!raw) return DEFAULT_QUIZ_DEFAULTS;
     const stored = JSON.parse(raw) as Partial<QuizDefaults>;
-    return { ...DEFAULT_QUIZ_DEFAULTS, ...stored, spec: { ...DEFAULT_SPEC, ...(stored.spec ?? {}) } };
+    return {
+      ...DEFAULT_QUIZ_DEFAULTS,
+      ...stored,
+      spec: { ...DEFAULT_SPEC, ...(stored.spec ?? {}), mode: "simple" },
+      specAdvanced: { ...DEFAULT_SPEC_ADVANCED, ...(stored.specAdvanced ?? {}), mode: "advanced" },
+    };
+
+
 
   } catch {
     return DEFAULT_QUIZ_DEFAULTS;

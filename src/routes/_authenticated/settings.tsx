@@ -16,6 +16,8 @@ import {
   setQuizDefaults,
   DEFAULT_QUIZ_DEFAULTS,
   type QuizDefaults,
+  type StyleSpec,
+
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,7 +43,6 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 type Form = {
   appLanguage: string;
-  theme: "dark" | "light";
   planning: boolean;
   defaults: QuizDefaults;
 };
@@ -54,12 +55,14 @@ function SettingsPage() {
 
   const [saved, setSaved] = useState<Form | null>(null);
   const [form, setForm] = useState<Form | null>(null);
+  /* Simple/Advanced is just a view switch — it is never part of the saved settings */
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [confirmReset, setConfirmReset] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
     const current: Form = {
       appLanguage: language,
-      theme: theme === "light" ? "light" : "dark",
       planning: getPlanningEnabled(),
       defaults: getQuizDefaults(),
     };
@@ -69,6 +72,12 @@ function SettingsPage() {
     hydrated.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!confirmReset) return;
+    const id = window.setTimeout(() => setConfirmReset(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [confirmReset]);
 
   const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
@@ -84,10 +93,23 @@ function SettingsPage() {
   const patch = (p: Partial<Form>) => setForm((f) => ({ ...f!, ...p }));
   const patchDefaults = (p: Partial<QuizDefaults>) => setForm((f) => ({ ...f!, defaults: { ...f!.defaults, ...p } }));
 
+  const editingSpec: StyleSpec =
+    mode === "simple"
+      ? { ...form.defaults.spec, mode: "simple" }
+      : { ...form.defaults.specAdvanced, mode: "advanced" };
+
+  const setEditingSpec = (next: StyleSpec) => {
+    if (next.mode !== mode) {
+      setMode(next.mode);
+      return;
+    }
+    if (mode === "simple") patchDefaults({ spec: { ...next, mode: "simple" } });
+    else patchDefaults({ specAdvanced: { ...next, mode: "advanced" } });
+  };
+
   const save = () => {
     setQuizDefaults(form.defaults);
     setPlanningEnabledValue(form.planning);
-    if (form.theme !== theme) setTheme(form.theme);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
     clearSettingsDraft();
@@ -99,11 +121,19 @@ function SettingsPage() {
     clearSettingsDraft();
   };
 
+  const resetAll = () => {
+    setForm({ appLanguage: "English", planning: true, defaults: DEFAULT_QUIZ_DEFAULTS });
+    setTheme("dark");
+    setConfirmReset(false);
+    toast.success(t("Everything is back to the system default — save to keep it."));
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     toast.success(t("Logged out"));
     navigate({ to: "/auth" });
   };
+
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-40 sm:px-8 sm:py-10 md:pb-32">
@@ -154,18 +184,21 @@ function SettingsPage() {
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <SlidersHorizontal className="h-4 w-4 shrink-0 text-primary" /> {t("Quiz defaults")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("Used every time you start a new quiz.")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Used every time you start a new quiz. Simple and Advanced keep their own defaults.")}
+          </p>
 
           <div className="mt-4">
             <DifficultyControls
               difficulty={form.defaults.difficulty}
               setDifficulty={(d) => patchDefaults({ difficulty: d })}
-              spec={form.defaults.spec}
-              setSpec={(s) => patchDefaults({ spec: s })}
+              spec={editingSpec}
+              setSpec={setEditingSpec}
               countText={String(form.defaults.count)}
               setCountText={(v) => patchDefaults({ count: Math.max(1, Math.min(100, Number(v) || 1)) })}
             />
           </div>
+
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
@@ -220,13 +253,13 @@ function SettingsPage() {
 
         <section className="panel p-4 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
-            {form.theme === "dark" ? <Moon className="h-4 w-4 shrink-0 text-primary" /> : <Sun className="h-4 w-4 shrink-0 text-primary" />}
+            {theme === "light" ? <Sun className="h-4 w-4 shrink-0 text-primary" /> : <Moon className="h-4 w-4 shrink-0 text-primary" />}
             {t("Appearance")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("Choose your preferred theme.")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("Choose your preferred theme. It applies straight away.")}</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <ThemeOption active={form.theme === "dark"} onClick={() => patch({ theme: "dark" })} label={t("Dark")} icon={<Moon className="h-4 w-4" />} />
-            <ThemeOption active={form.theme === "light"} onClick={() => patch({ theme: "light" })} label={t("Light")} icon={<Sun className="h-4 w-4" />} />
+            <ThemeOption active={theme !== "light"} onClick={() => setTheme("dark")} label={t("Dark")} icon={<Moon className="h-4 w-4" />} />
+            <ThemeOption active={theme === "light"} onClick={() => setTheme("light")} label={t("Light")} icon={<Sun className="h-4 w-4" />} />
           </div>
         </section>
 
@@ -235,23 +268,17 @@ function SettingsPage() {
             <RotateCcw className="h-4 w-4 shrink-0 text-primary" /> {t("Reset all")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("Put every setting on this page back to the system default. You still need to save.")}
+            {t("Put every setting on this page back to the system default. Click twice to confirm — you still need to save.")}
           </p>
           <Button
-            variant="secondary"
+            variant={confirmReset ? "destructive" : "secondary"}
             className="mt-4 w-full sm:w-auto"
-            onClick={() =>
-              setForm({
-                appLanguage: "English",
-                theme: "dark",
-                planning: true,
-                defaults: DEFAULT_QUIZ_DEFAULTS,
-              })
-            }
+            onClick={() => (confirmReset ? resetAll() : setConfirmReset(true))}
           >
-            <RotateCcw className="mr-2 h-4 w-4" /> {t("Reset all settings")}
+            <RotateCcw className="mr-2 h-4 w-4" /> {confirmReset ? t("Are you sure?") : t("Reset all settings")}
           </Button>
         </section>
+
       </div>
 
 
