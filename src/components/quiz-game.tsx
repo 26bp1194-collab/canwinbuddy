@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, XCircle, Trophy, Loader2, Sparkles, MessageSquare } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { X, Check, XCircle, Trophy } from "lucide-react";
 
-import { quizFeedback, type Question } from "@/lib/ai.functions";
+import { type Question } from "@/lib/ai.functions";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+
 
 interface Props {
   questions: Question[];
