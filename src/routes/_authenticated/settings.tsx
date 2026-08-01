@@ -248,13 +248,13 @@ function SettingsPage() {
 
         <section className="panel p-4 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
-            {form.theme === "dark" ? <Moon className="h-4 w-4 shrink-0 text-primary" /> : <Sun className="h-4 w-4 shrink-0 text-primary" />}
+            {theme === "light" ? <Sun className="h-4 w-4 shrink-0 text-primary" /> : <Moon className="h-4 w-4 shrink-0 text-primary" />}
             {t("Appearance")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("Choose your preferred theme.")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("Choose your preferred theme. It applies straight away.")}</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <ThemeOption active={form.theme === "dark"} onClick={() => patch({ theme: "dark" })} label={t("Dark")} icon={<Moon className="h-4 w-4" />} />
-            <ThemeOption active={form.theme === "light"} onClick={() => patch({ theme: "light" })} label={t("Light")} icon={<Sun className="h-4 w-4" />} />
+            <ThemeOption active={theme !== "light"} onClick={() => setTheme("dark")} label={t("Dark")} icon={<Moon className="h-4 w-4" />} />
+            <ThemeOption active={theme === "light"} onClick={() => setTheme("light")} label={t("Light")} icon={<Sun className="h-4 w-4" />} />
           </div>
         </section>
 
@@ -263,23 +263,17 @@ function SettingsPage() {
             <RotateCcw className="h-4 w-4 shrink-0 text-primary" /> {t("Reset all")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("Put every setting on this page back to the system default. You still need to save.")}
+            {t("Put every setting on this page back to the system default. Click twice to confirm — you still need to save.")}
           </p>
           <Button
-            variant="secondary"
+            variant={confirmReset ? "destructive" : "secondary"}
             className="mt-4 w-full sm:w-auto"
-            onClick={() =>
-              setForm({
-                appLanguage: "English",
-                theme: "dark",
-                planning: true,
-                defaults: DEFAULT_QUIZ_DEFAULTS,
-              })
-            }
+            onClick={() => (confirmReset ? resetAll() : setConfirmReset(true))}
           >
-            <RotateCcw className="mr-2 h-4 w-4" /> {t("Reset all settings")}
+            <RotateCcw className="mr-2 h-4 w-4" /> {confirmReset ? t("Are you sure?") : t("Reset all settings")}
           </Button>
         </section>
+
       </div>
 
 
