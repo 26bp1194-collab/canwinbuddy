@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight } from "lucide-react";
+import { Loader2, Wand2, Sparkles, CheckCircle2, Globe, ShieldCheck, ListChecks, ArrowRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { aiTextHelper, planTextQuestions } from "@/lib/ai.functions";
