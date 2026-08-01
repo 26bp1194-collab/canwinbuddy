@@ -649,3 +649,107 @@ function EditDialog({
     </Dialog>
   );
 }
+
+const PROGRESSIVE_PRESETS: Array<{ label: string; instruction: string }> = [
+  {
+    label: "Easier",
+    instruction:
+      "EASIER: the new set must test the most obvious, directly stated facts, use plain everyday wording, and make the three wrong options clearly wrong.",
+  },
+  {
+    label: "Harder",
+    instruction:
+      "HARDER: the new set must require reasoning, precise detail, or combining facts, and the three wrong options must be genuinely plausible and closely related.",
+  },
+  {
+    label: "Same level",
+    instruction: "SAME LEVEL: keep the same difficulty as the current set.",
+  },
+];
+
+function ProgressiveDialog({
+  open,
+  onOpenChange,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onApply: (instruction: string, presets: string[]) => Promise<void>;
+}) {
+  const t = useT();
+  const [pick, setPick] = useState<string>(PROGRESSIVE_PRESETS[1].instruction);
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPick(PROGRESSIVE_PRESETS[1].instruction);
+      setPrompt("");
+    }
+  }, [open]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      await onApply(
+        `${t("Build a follow-up quiz on the same source. Every question must be freshly worded and must not repeat the current questions.")} ${prompt.trim()}`.trim(),
+        [pick],
+      );
+      toast.success(t("New quiz created"));
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't create the new quiz"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
+      <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">{t("New quiz")}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            {t("Make a follow-up quiz from this one. Pick a difficulty change and add a comment if you want.")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {PROGRESSIVE_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => setPick(p.instruction)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  pick === p.instruction
+                    ? "border-primary/60 bg-primary text-primary-foreground"
+                    : "border-border bg-secondary/50 hover:bg-accent/60",
+                )}
+              >
+                {t(p.label)}
+              </button>
+            ))}
+          </div>
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t("Optional — tell the AI how you want the next quiz, e.g. focus on the parts I got wrong.")}
+            className="min-h-[100px]"
+          />
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy} className="w-full sm:w-auto">
+            {t("Cancel")}
+          </Button>
+          <Button onClick={run} disabled={busy}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {t("Create quiz")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
