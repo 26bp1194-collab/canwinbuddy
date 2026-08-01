@@ -359,7 +359,14 @@ function ExportPage() {
         }}
       />
 
+      <ProgressiveDialog
+        open={progressiveOpen}
+        onOpenChange={setProgressiveOpen}
+        onApply={makeProgressive}
+      />
+
       <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} sourceText={(data.source_text as string) ?? ""} />
+
 
       <ExplainDialog
         question={explainIndex !== null ? questions[explainIndex] : null}
