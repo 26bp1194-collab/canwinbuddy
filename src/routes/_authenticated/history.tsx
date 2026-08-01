@@ -83,8 +83,10 @@ function HistoryPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_groups")
-        .select("id, name, created_at")
+        .select("id, name, created_at, is_favorite")
+        .order("is_favorite", { ascending: false })
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       return data;
     },
