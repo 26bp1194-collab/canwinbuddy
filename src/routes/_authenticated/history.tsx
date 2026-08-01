@@ -132,6 +132,7 @@ function HistoryPage() {
 
   const deleteGroup = useMutation({
     mutationFn: async (id: string) => {
+      await supabase.from("quiz_group_items").delete().eq("group_id", id);
       const { error } = await supabase.from("quiz_groups").delete().eq("id", id);
       if (error) throw error;
     },
@@ -140,7 +141,50 @@ function HistoryPage() {
       qc.invalidateQueries({ queryKey: ["group-items"] });
       toast.success(t("Group deleted"));
     },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not delete group"),
   });
+
+  const renameGroup = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("quiz_groups").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["groups"] });
+      setRenameFor(null);
+      toast.success(t("Group renamed"));
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not rename group"),
+  });
+
+  const toggleFavorite = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("quiz_groups").update({ is_favorite: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["groups"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update group"),
+  });
+
+  const startPlayAll = async (group: { id: string; name: string }) => {
+    const ids = idsInGroup(group.id);
+    if (!ids.length) {
+      toast.error(t("This group has no quizzes yet."));
+      return;
+    }
+    const { data: sets, error } = await supabase.from("quiz_sets").select("questions").in("id", ids);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const questions = (sets ?? []).flatMap((s) => (s.questions as unknown as Question[]) ?? []);
+    if (!questions.length) {
+      toast.error(t("This group has no questions yet."));
+      return;
+    }
+    setPlayAll({ name: group.name, questions });
+  };
+
 
   const toggleMembership = useMutation({
     mutationFn: async ({ groupId, quizId, member }: { groupId: string; quizId: string; member: boolean }) => {
