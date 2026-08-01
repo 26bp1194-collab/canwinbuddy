@@ -393,6 +393,71 @@ function HistoryPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!renameFor} onOpenChange={(v) => !v && setRenameFor(null)}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-sm p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">{t("Change name")}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{t("Give this group a new name.")}</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameFor?.name ?? ""}
+            onChange={(e) => setRenameFor((r) => (r ? { ...r, name: e.target.value } : r))}
+            onKeyDown={(e) =>
+              e.key === "Enter" && renameFor?.name.trim() && renameGroup.mutate({ id: renameFor.id, name: renameFor.name.trim() })
+            }
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setRenameFor(null)}>{t("Cancel")}</Button>
+            <Button
+              disabled={!renameFor?.name.trim() || renameGroup.isPending}
+              onClick={() => renameFor && renameGroup.mutate({ id: renameFor.id, name: renameFor.name.trim() })}
+            >
+              {t("Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!addQuizFor} onOpenChange={(v) => !v && setAddQuizFor(null)}>
+        <DialogContent className="max-h-[80vh] w-[calc(100vw-1.5rem)] max-w-sm overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">{t("Add quiz")}</DialogTitle>
+            <DialogDescription className="break-words text-xs sm:text-sm">{addQuizFor?.name}</DialogDescription>
+          </DialogHeader>
+          {!data?.length ? (
+            <p className="text-sm text-muted-foreground">{t("No history yet")}</p>
+          ) : (
+            <div className="space-y-3">
+              {data.map((row) => {
+                const member = addQuizFor ? idsInGroup(addQuizFor.id).includes(row.id) : false;
+                return (
+                  <div key={row.id} className="flex items-center gap-3">
+                    <Checkbox
+                      id={`aq-${row.id}`}
+                      checked={member}
+                      onCheckedChange={() =>
+                        addQuizFor && toggleMembership.mutate({ groupId: addQuizFor.id, quizId: row.id, member })
+                      }
+                    />
+                    <Label htmlFor={`aq-${row.id}`} className="min-w-0 cursor-pointer truncate text-sm font-medium">
+                      {row.title}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setAddQuizFor(null)}>{t("Done")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AnimatePresence>
+        {playAll && (
+          <QuizGame questions={playAll.questions} title={playAll.name} onClose={() => setPlayAll(null)} />
+        )}
+      </AnimatePresence>
 
 
     </div>
