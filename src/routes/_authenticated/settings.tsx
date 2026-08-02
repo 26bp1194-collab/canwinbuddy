@@ -21,6 +21,8 @@ import {
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteMyAccount } from "@/lib/account.functions";
+
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
