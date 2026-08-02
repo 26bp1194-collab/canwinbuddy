@@ -137,6 +137,23 @@ function SettingsPage() {
     navigate({ to: "/auth" });
   };
 
+  const deleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      await supabase.auth.signOut();
+      clearSettingsDraft();
+      toast.success(t("Your account has been deleted"));
+      navigate({ to: "/auth" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete your account");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
+
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-40 sm:px-8 sm:py-10 md:pb-32">
