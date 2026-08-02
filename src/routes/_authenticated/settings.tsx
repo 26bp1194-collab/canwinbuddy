@@ -58,7 +58,10 @@ function SettingsPage() {
   /* Simple/Advanced is just a view switch — it is never part of the saved settings */
   const [mode, setMode] = useState<"simple" | "advanced">("simple");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const hydrated = useRef(false);
+
 
   useEffect(() => {
     const current: Form = {
