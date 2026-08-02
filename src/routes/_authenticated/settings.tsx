@@ -84,6 +84,13 @@ function SettingsPage() {
     return () => window.clearTimeout(id);
   }, [confirmReset]);
 
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [confirmDelete]);
+
+
   const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
   /* Keep unsaved edits when navigating away, and drop them once nothing changed */
