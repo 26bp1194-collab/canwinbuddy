@@ -212,12 +212,82 @@ function HistoryPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update group"),
   });
 
+  const toggleQuizFavorite = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("quiz_sets").update({ is_favorite: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update quiz"),
+  });
+
   const idsInGroup = (groupId: string) =>
     (items ?? []).filter((i) => i.group_id === groupId).map((i) => i.quiz_set_id);
 
   /* Quizzes that live in a group only show up inside that group */
   const grouped = new Set((items ?? []).map((i) => i.quiz_set_id));
   const ungrouped = (data ?? []).filter((r) => !grouped.has(r.id));
+
+  const countById = new Map((data ?? []).map((r) => [r.id, r.question_count]));
+  const groupQuestionCount = (groupId: string) =>
+    idsInGroup(groupId).reduce((sum, id) => sum + (countById.get(id) ?? 0), 0);
+
+  type Sortable = { name: string; created_at: string; is_favorite: boolean; count: number };
+  const applySort = <T,>(list: T[], pick: (item: T) => Sortable): T[] => {
+    const arr = [...list];
+    const time = (v: string) => new Date(v).getTime();
+    arr.sort((a, b) => {
+      const x = pick(a);
+      const y = pick(b);
+      switch (sort) {
+        case "newest":
+          return time(y.created_at) - time(x.created_at);
+        case "oldest":
+          return time(x.created_at) - time(y.created_at);
+        case "az":
+          return x.name.localeCompare(y.name);
+        case "za":
+          return y.name.localeCompare(x.name);
+        case "most":
+          return y.count - x.count;
+        case "least":
+          return x.count - y.count;
+        default:
+          if (x.is_favorite !== y.is_favorite) return x.is_favorite ? -1 : 1;
+          return time(y.created_at) - time(x.created_at);
+      }
+    });
+    return arr;
+  };
+
+  const visibleGroups = applySort(
+    (groups ?? []).filter((g) => (category === "favourites" ? g.is_favorite : category === "all" || category === "groups")),
+    (g) => ({ name: g.name, created_at: g.created_at, is_favorite: g.is_favorite, count: groupQuestionCount(g.id) }),
+  );
+
+  const visibleQuizzes = applySort(
+    ungrouped.filter((r) => (category === "favourites" ? r.is_favorite : category === "all" || category === "quizzes")),
+    (r) => ({ name: r.title, created_at: r.created_at, is_favorite: r.is_favorite, count: r.question_count }),
+  );
+
+  const sortOptions: { value: SortKey; label: string }[] = [
+    { value: "default", label: t("Default") },
+    { value: "newest", label: t("Newest") },
+    { value: "oldest", label: t("Oldest") },
+    { value: "az", label: t("A–Z") },
+    { value: "za", label: t("Z–A") },
+    { value: "most", label: t("Most questions") },
+    { value: "least", label: t("Least questions") },
+  ];
+
+  const categoryOptions: { value: CategoryKey; label: string }[] = [
+    { value: "all", label: t("Everything") },
+    { value: "groups", label: t("Groups") },
+    { value: "quizzes", label: t("Quizzes") },
+    { value: "favourites", label: t("Favourited") },
+  ];
+
+
 
 
   return (
