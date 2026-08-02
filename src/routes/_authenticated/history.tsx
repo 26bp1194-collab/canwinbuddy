@@ -388,16 +388,22 @@ function HistoryPage() {
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !ungrouped.length ? (
+        ) : !visibleQuizzes.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 font-medium">{data?.length ? t("Every quiz is already in a group.") : t("No history yet")}</p>
+            <p className="mt-3 font-medium">
+              {category !== "all" && data?.length
+                ? t("Nothing matches this filter.")
+                : data?.length
+                  ? t("Every quiz is already in a group.")
+                  : t("No history yet")}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">{t("Generate your first quiz to see it here.")}</p>
             <Button asChild className="mt-4"><Link to="/generate">{t("Generate now")}</Link></Button>
           </div>
         ) : (
           <ul className="space-y-3">
-            {ungrouped.map((row) => (
+            {visibleQuizzes.map((row) => (
 
               <motion.li
                 key={row.id}
@@ -406,14 +412,23 @@ function HistoryPage() {
                 whileHover={{ y: -2 }}
                 className="panel"
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-5">
-                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 flex-1">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1 p-2 pl-4 sm:gap-2 sm:p-4 sm:pl-5">
+                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 flex-1 py-2">
                     <p className="truncate font-medium">{row.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {row.question_count} {t("questions")} · {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
                     </p>
                   </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={row.is_favorite ? t("Unfavourite quiz") : t("Favourite quiz")}
+                    onClick={() => toggleQuizFavorite.mutate({ id: row.id, value: !row.is_favorite })}
+                  >
+                    <Star className={row.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
+                  </Button>
                   <DropdownMenu>
+
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${row.title}`}>
                         <MoreVertical className="h-4 w-4" />
