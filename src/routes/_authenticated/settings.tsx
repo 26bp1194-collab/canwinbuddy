@@ -279,6 +279,25 @@ function SettingsPage() {
           </Button>
         </section>
 
+        <section className="panel border-destructive/40 p-4 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Trash2 className="h-4 w-4 shrink-0 text-destructive" /> {t("Delete account")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Permanently delete your account and every quiz, group and share you made. Click twice to confirm — this cannot be undone.")}
+          </p>
+          <Button
+            variant={confirmDelete ? "destructive" : "secondary"}
+            className="mt-4 w-full sm:w-auto"
+            disabled={deleting}
+            onClick={() => (confirmDelete ? void deleteAccount() : setConfirmDelete(true))}
+          >
+            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+            {confirmDelete ? t("Are you sure?") : t("Delete my account")}
+          </Button>
+        </section>
+
+
       </div>
 
 
