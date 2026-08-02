@@ -48,7 +48,10 @@ export const Route = createFileRoute("/_authenticated/history")({
   component: HistoryPage,
 });
 
-type Row = { id: string; title: string; question_count: number; created_at: string };
+type Row = { id: string; title: string; question_count: number; created_at: string; is_favorite: boolean };
+
+type SortKey = "default" | "newest" | "oldest" | "az" | "za" | "most" | "least";
+type CategoryKey = "all" | "groups" | "quizzes" | "favourites";
 
 function HistoryPage() {
   const t = useT();
@@ -60,6 +63,8 @@ function HistoryPage() {
   const [renameFor, setRenameFor] = useState<{ id: string; name: string } | null>(null);
   const [addQuizFor, setAddQuizFor] = useState<{ id: string; name: string } | null>(null);
   const [playAll, setPlayAll] = useState<{ name: string; questions: Question[] } | null>(null);
+  const [sort, setSort] = useState<SortKey>("default");
+  const [category, setCategory] = useState<CategoryKey>("all");
 
 
 
@@ -70,12 +75,13 @@ function HistoryPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_sets")
-        .select("id, title, question_count, created_at")
+        .select("id, title, question_count, created_at, is_favorite")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as Row[];
     },
   });
+
 
   const { data: groups } = useQuery({
     queryKey: ["groups", user?.id],
