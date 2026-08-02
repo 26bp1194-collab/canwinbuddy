@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 
 import { useT } from "@/lib/i18n";
@@ -48,7 +50,10 @@ export const Route = createFileRoute("/_authenticated/history")({
   component: HistoryPage,
 });
 
-type Row = { id: string; title: string; question_count: number; created_at: string };
+type Row = { id: string; title: string; question_count: number; created_at: string; is_favorite: boolean };
+
+type SortKey = "default" | "newest" | "oldest" | "az" | "za" | "most" | "least";
+type CategoryKey = "all" | "groups" | "quizzes" | "favourites";
 
 function HistoryPage() {
   const t = useT();
@@ -60,6 +65,8 @@ function HistoryPage() {
   const [renameFor, setRenameFor] = useState<{ id: string; name: string } | null>(null);
   const [addQuizFor, setAddQuizFor] = useState<{ id: string; name: string } | null>(null);
   const [playAll, setPlayAll] = useState<{ name: string; questions: Question[] } | null>(null);
+  const [sort, setSort] = useState<SortKey>("default");
+  const [category, setCategory] = useState<CategoryKey>("all");
 
 
 
@@ -70,12 +77,13 @@ function HistoryPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_sets")
-        .select("id, title, question_count, created_at")
+        .select("id, title, question_count, created_at, is_favorite")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as Row[];
     },
   });
+
 
   const { data: groups } = useQuery({
     queryKey: ["groups", user?.id],
@@ -206,12 +214,82 @@ function HistoryPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update group"),
   });
 
+  const toggleQuizFavorite = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("quiz_sets").update({ is_favorite: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update quiz"),
+  });
+
   const idsInGroup = (groupId: string) =>
     (items ?? []).filter((i) => i.group_id === groupId).map((i) => i.quiz_set_id);
 
   /* Quizzes that live in a group only show up inside that group */
   const grouped = new Set((items ?? []).map((i) => i.quiz_set_id));
   const ungrouped = (data ?? []).filter((r) => !grouped.has(r.id));
+
+  const countById = new Map((data ?? []).map((r) => [r.id, r.question_count]));
+  const groupQuestionCount = (groupId: string) =>
+    idsInGroup(groupId).reduce((sum, id) => sum + (countById.get(id) ?? 0), 0);
+
+  type Sortable = { name: string; created_at: string; is_favorite: boolean; count: number };
+  const applySort = <T,>(list: T[], pick: (item: T) => Sortable): T[] => {
+    const arr = [...list];
+    const time = (v: string) => new Date(v).getTime();
+    arr.sort((a, b) => {
+      const x = pick(a);
+      const y = pick(b);
+      switch (sort) {
+        case "newest":
+          return time(y.created_at) - time(x.created_at);
+        case "oldest":
+          return time(x.created_at) - time(y.created_at);
+        case "az":
+          return x.name.localeCompare(y.name);
+        case "za":
+          return y.name.localeCompare(x.name);
+        case "most":
+          return y.count - x.count;
+        case "least":
+          return x.count - y.count;
+        default:
+          if (x.is_favorite !== y.is_favorite) return x.is_favorite ? -1 : 1;
+          return time(y.created_at) - time(x.created_at);
+      }
+    });
+    return arr;
+  };
+
+  const visibleGroups = applySort(
+    (groups ?? []).filter((g) => (category === "favourites" ? g.is_favorite : category === "all" || category === "groups")),
+    (g) => ({ name: g.name, created_at: g.created_at, is_favorite: g.is_favorite, count: groupQuestionCount(g.id) }),
+  );
+
+  const visibleQuizzes = applySort(
+    ungrouped.filter((r) => (category === "favourites" ? r.is_favorite : category === "all" || category === "quizzes")),
+    (r) => ({ name: r.title, created_at: r.created_at, is_favorite: r.is_favorite, count: r.question_count }),
+  );
+
+  const sortOptions: { value: SortKey; label: string }[] = [
+    { value: "default", label: t("Default") },
+    { value: "newest", label: t("Newest") },
+    { value: "oldest", label: t("Oldest") },
+    { value: "az", label: t("A–Z") },
+    { value: "za", label: t("Z–A") },
+    { value: "most", label: t("Most questions") },
+    { value: "least", label: t("Least questions") },
+  ];
+
+  const categoryOptions: { value: CategoryKey; label: string }[] = [
+    { value: "all", label: t("Everything") },
+    { value: "groups", label: t("Groups") },
+    { value: "quizzes", label: t("Quizzes") },
+    { value: "favourites", label: t("Favourited") },
+  ];
+
+
 
 
   return (
@@ -226,10 +304,34 @@ function HistoryPage() {
         </Button>
       </motion.div>
 
-      {!!groups?.length && (
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:max-w-md">
+        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+          <SelectTrigger aria-label={t("Sort")}>
+            <SelectValue placeholder={t("Sort")} />
+          </SelectTrigger>
+          <SelectContent>
+            {sortOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={category} onValueChange={(v) => setCategory(v as CategoryKey)}>
+          <SelectTrigger aria-label={t("Category")}>
+            <SelectValue placeholder={t("Category")} />
+          </SelectTrigger>
+          <SelectContent>
+            {categoryOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!!visibleGroups.length && (
         <div className="mt-6 space-y-3">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Groups")}</p>
-          {groups.map((g) => {
+          {visibleGroups.map((g) => {
+
             const ids = idsInGroup(g.id);
             return (
               <div key={g.id} className="panel flex items-center gap-1 p-2 pl-4 transition-colors hover:bg-accent/40 sm:gap-2 sm:p-4">
@@ -286,16 +388,22 @@ function HistoryPage() {
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !ungrouped.length ? (
+        ) : !visibleQuizzes.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 font-medium">{data?.length ? t("Every quiz is already in a group.") : t("No history yet")}</p>
+            <p className="mt-3 font-medium">
+              {category !== "all" && data?.length
+                ? t("Nothing matches this filter.")
+                : data?.length
+                  ? t("Every quiz is already in a group.")
+                  : t("No history yet")}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">{t("Generate your first quiz to see it here.")}</p>
             <Button asChild className="mt-4"><Link to="/generate">{t("Generate now")}</Link></Button>
           </div>
         ) : (
           <ul className="space-y-3">
-            {ungrouped.map((row) => (
+            {visibleQuizzes.map((row) => (
 
               <motion.li
                 key={row.id}
@@ -304,14 +412,23 @@ function HistoryPage() {
                 whileHover={{ y: -2 }}
                 className="panel"
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-5">
-                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 flex-1">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1 p-2 pl-4 sm:gap-2 sm:p-4 sm:pl-5">
+                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 flex-1 py-2">
                     <p className="truncate font-medium">{row.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {row.question_count} {t("questions")} · {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
                     </p>
                   </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={row.is_favorite ? t("Unfavourite quiz") : t("Favourite quiz")}
+                    onClick={() => toggleQuizFavorite.mutate({ id: row.id, value: !row.is_favorite })}
+                  >
+                    <Star className={row.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
+                  </Button>
                   <DropdownMenu>
+
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${row.title}`}>
                         <MoreVertical className="h-4 w-4" />

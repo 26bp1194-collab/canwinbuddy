@@ -108,6 +108,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_favorite: boolean
           question_count: number
           questions: Json
           source_text: string
@@ -118,6 +119,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_favorite?: boolean
           question_count?: number
           questions: Json
           source_text: string
@@ -128,6 +130,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_favorite?: boolean
           question_count?: number
           questions?: Json
           source_text?: string

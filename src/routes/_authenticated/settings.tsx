@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw } from "lucide-react";
+import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/lib/auth-context";
@@ -21,6 +21,8 @@ import {
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteMyAccount } from "@/lib/account.functions";
+
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -58,7 +60,10 @@ function SettingsPage() {
   /* Simple/Advanced is just a view switch — it is never part of the saved settings */
   const [mode, setMode] = useState<"simple" | "advanced">("simple");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const hydrated = useRef(false);
+
 
   useEffect(() => {
     const current: Form = {
@@ -78,6 +83,13 @@ function SettingsPage() {
     const id = window.setTimeout(() => setConfirmReset(false), 5000);
     return () => window.clearTimeout(id);
   }, [confirmReset]);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [confirmDelete]);
+
 
   const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
@@ -133,6 +145,23 @@ function SettingsPage() {
     toast.success(t("Logged out"));
     navigate({ to: "/auth" });
   };
+
+  const deleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      await supabase.auth.signOut();
+      clearSettingsDraft();
+      toast.success(t("Your account has been deleted"));
+      navigate({ to: "/auth" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete your account");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
 
 
   return (
@@ -278,6 +307,25 @@ function SettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4" /> {confirmReset ? t("Are you sure?") : t("Reset all settings")}
           </Button>
         </section>
+
+        <section className="panel border-destructive/40 p-4 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Trash2 className="h-4 w-4 shrink-0 text-destructive" /> {t("Delete account")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Permanently delete your account and every quiz, group and share you made. Click twice to confirm — this cannot be undone.")}
+          </p>
+          <Button
+            variant={confirmDelete ? "destructive" : "secondary"}
+            className="mt-4 w-full sm:w-auto"
+            disabled={deleting}
+            onClick={() => (confirmDelete ? void deleteAccount() : setConfirmDelete(true))}
+          >
+            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+            {confirmDelete ? t("Are you sure?") : t("Delete my account")}
+          </Button>
+        </section>
+
 
       </div>
 
