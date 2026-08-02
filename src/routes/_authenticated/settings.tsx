@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw } from "lucide-react";
+import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/lib/auth-context";
