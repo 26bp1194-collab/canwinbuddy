@@ -302,10 +302,34 @@ function HistoryPage() {
         </Button>
       </motion.div>
 
-      {!!groups?.length && (
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:max-w-md">
+        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+          <SelectTrigger aria-label={t("Sort")}>
+            <SelectValue placeholder={t("Sort")} />
+          </SelectTrigger>
+          <SelectContent>
+            {sortOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={category} onValueChange={(v) => setCategory(v as CategoryKey)}>
+          <SelectTrigger aria-label={t("Category")}>
+            <SelectValue placeholder={t("Category")} />
+          </SelectTrigger>
+          <SelectContent>
+            {categoryOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!!visibleGroups.length && (
         <div className="mt-6 space-y-3">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("Groups")}</p>
-          {groups.map((g) => {
+          {visibleGroups.map((g) => {
+
             const ids = idsInGroup(g.id);
             return (
               <div key={g.id} className="panel flex items-center gap-1 p-2 pl-4 transition-colors hover:bg-accent/40 sm:gap-2 sm:p-4">
