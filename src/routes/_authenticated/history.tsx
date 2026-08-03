@@ -304,28 +304,35 @@ function HistoryPage() {
         </Button>
       </motion.div>
 
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:max-w-md">
-        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-          <SelectTrigger aria-label={t("Sort")}>
-            <SelectValue placeholder={t("Sort")} />
-          </SelectTrigger>
-          <SelectContent>
-            {sortOptions.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={category} onValueChange={(v) => setCategory(v as CategoryKey)}>
-          <SelectTrigger aria-label={t("Category")}>
-            <SelectValue placeholder={t("Category")} />
-          </SelectTrigger>
-          <SelectContent>
-            {categoryOptions.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="mt-5 grid grid-cols-1 gap-2 sm:max-w-2xl sm:grid-cols-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-sm text-muted-foreground">{t("Sorting")}</span>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <SelectTrigger aria-label={t("Sorting")} className="min-w-0 flex-1">
+              <SelectValue placeholder={t("Sorting")} />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-sm text-muted-foreground">{t("Category")}</span>
+          <Select value={category} onValueChange={(v) => setCategory(v as CategoryKey)}>
+            <SelectTrigger aria-label={t("Category")} className="min-w-0 flex-1">
+              <SelectValue placeholder={t("Category")} />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
 
       {!!visibleGroups.length && (
         <div className="mt-6 space-y-3">
