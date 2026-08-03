@@ -161,22 +161,32 @@ export function useQuizDefaults() {
   return { defaults, ready, updateDefaults: update };
 }
 
-/* ---------------- Generation draft (survives navigation) ---------------- */
+/* ---------------- Generation draft (survives navigation, per tab) ---------------- */
 
 export type GenerateDraft = {
   source: string;
   title: string;
   count: number;
+  countText?: string;
   difficulty: Difficulty;
   spec?: StyleSpec;
+  mode?: "simple" | "advanced";
+  specs?: { simple: StyleSpec; advanced: StyleSpec };
 };
 
-
-
-export function getDraft(): GenerateDraft | null {
+/* sessionStorage: kept while navigating inside the same tab, fresh in a new tab */
+function draftStore(): Storage | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function getDraft(): GenerateDraft | null {
+  try {
+    const raw = draftStore()?.getItem(DRAFT_KEY);
     return raw ? (JSON.parse(raw) as GenerateDraft) : null;
   } catch {
     return null;
@@ -184,14 +194,22 @@ export function getDraft(): GenerateDraft | null {
 }
 
 export function saveDraft(draft: GenerateDraft) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  try {
+    draftStore()?.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function clearDraft() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(DRAFT_KEY);
+  try {
+    draftStore()?.removeItem(DRAFT_KEY);
+    window.localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
 }
+
 
 /* ---------------- Generation timings ---------------- */
 
