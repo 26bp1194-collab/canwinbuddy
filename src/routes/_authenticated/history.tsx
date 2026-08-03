@@ -283,7 +283,7 @@ function HistoryPage() {
   ];
 
   const categoryOptions: { value: CategoryKey; label: string }[] = [
-    { value: "all", label: t("Everything") },
+    { value: "all", label: t("All") },
     { value: "groups", label: t("Groups") },
     { value: "quizzes", label: t("Quizzes") },
     { value: "favourites", label: t("Favourited") },
