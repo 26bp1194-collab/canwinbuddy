@@ -89,12 +89,12 @@ function GeneratePage() {
     if (draft) {
       setSource(draft.source);
       setTitle(draft.title);
-      setCountText(String(draft.count));
+      setCountText(draft.countText ?? String(draft.count));
       setDifficulty(draft.difficulty);
-      /* Simple/Advanced is never restored — a new page always starts on Simple */
+      setMode(draft.mode ?? "simple");
       setSpecs({
-        simple: { ...DEFAULT_SPEC, ...(draft.spec ?? defaults.spec), mode: "simple" },
-        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+        simple: { ...DEFAULT_SPEC, ...defaults.spec, ...(draft.specs?.simple ?? (draft.spec?.mode !== "advanced" ? draft.spec : undefined)), mode: "simple" },
+        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, ...(draft.specs?.advanced ?? (draft.spec?.mode === "advanced" ? draft.spec : undefined)), mode: "advanced" },
       });
     } else {
       setCountText(String(defaults.count));
@@ -121,20 +121,23 @@ function GeneratePage() {
     restored.current = true;
   }, [t]);
 
-  /* Persist the draft (text AND settings) so navigating away never loses work */
+  /* Persist the whole page state (text AND settings) so navigating away never loses work */
   useEffect(() => {
     if (!restored.current) return;
     const d = getQuizDefaults();
     const settingsAreDefault =
+      mode === "simple" &&
       count === d.count &&
       difficulty === d.difficulty &&
-      JSON.stringify({ ...spec, mode: "simple" }) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" });
+      JSON.stringify(specs.simple) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" }) &&
+      JSON.stringify(specs.advanced) === JSON.stringify({ ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" });
     if (!source.trim() && !title.trim() && settingsAreDefault) {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, difficulty, spec });
-  }, [source, title, count, difficulty, spec]);
+    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs });
+  }, [source, title, count, countText, difficulty, spec, mode, specs]);
+
 
   const resetSettings = () => {
     const d = getQuizDefaults();
