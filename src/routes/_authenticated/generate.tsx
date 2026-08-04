@@ -81,6 +81,7 @@ function GeneratePage() {
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperSeed, setHelperSeed] = useState("");
   const restored = useRef(false);
+  const finished = useRef(false);
 
   /* Restore any in-progress draft + a suggested follow-up quiz */
   useEffect(() => {
