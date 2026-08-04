@@ -81,6 +81,7 @@ function GeneratePage() {
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperSeed, setHelperSeed] = useState("");
   const restored = useRef(false);
+  const finished = useRef(false);
 
   /* Restore any in-progress draft + a suggested follow-up quiz */
   useEffect(() => {
@@ -123,7 +124,7 @@ function GeneratePage() {
 
   /* Persist the whole page state (text AND settings) so navigating away never loses work */
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored.current || finished.current) return;
     const d = getQuizDefaults();
     const settingsAreDefault =
       mode === "simple" &&
@@ -241,6 +242,7 @@ function GeneratePage() {
       setTotalMs(total);
       saveTimings(inserted.id, steps, total);
       setStage("done");
+      finished.current = true;
       clearDraft();
 
       if (questions.length < count) {
@@ -494,7 +496,6 @@ export function DifficultyControls({
           </div>
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{t("1–100 questions per set. Leave it empty and click away to reset to 1.")}</p>
 
     </div>
   );
