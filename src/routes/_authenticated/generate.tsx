@@ -241,6 +241,7 @@ function GeneratePage() {
       setTotalMs(total);
       saveTimings(inserted.id, steps, total);
       setStage("done");
+      finished.current = true;
       clearDraft();
 
       if (questions.length < count) {
