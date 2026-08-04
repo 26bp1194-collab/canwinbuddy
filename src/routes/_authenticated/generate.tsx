@@ -496,7 +496,6 @@ export function DifficultyControls({
           </div>
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{t("1–100 questions per set. Leave it empty and click away to reset to 1.")}</p>
 
     </div>
   );
