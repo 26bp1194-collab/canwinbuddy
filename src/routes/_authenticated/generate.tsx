@@ -124,7 +124,7 @@ function GeneratePage() {
 
   /* Persist the whole page state (text AND settings) so navigating away never loses work */
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored.current || finished.current) return;
     const d = getQuizDefaults();
     const settingsAreDefault =
       mode === "simple" &&
