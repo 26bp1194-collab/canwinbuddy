@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Play, Sparkles } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { getSharedQuiz } from "@/lib/share.functions";
 import type { Question } from "@/lib/ai.functions";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
