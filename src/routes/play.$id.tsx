@@ -31,13 +31,7 @@ function PlaySharedPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["share", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .rpc("get_shared_quiz", { share_id: id })
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => getSharedQuiz({ data: { id } }),
   });
 
   if (isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
