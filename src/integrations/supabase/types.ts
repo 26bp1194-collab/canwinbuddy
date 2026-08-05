@@ -186,14 +186,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_shared_quiz: {
-        Args: { share_id: string }
-        Returns: {
-          question_count: number
-          questions: Json
-          title: string
-        }[]
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never

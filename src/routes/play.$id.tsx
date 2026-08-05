@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Play, Sparkles } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { getSharedQuiz } from "@/lib/share.functions";
 import type { Question } from "@/lib/ai.functions";
 import { QuizGame } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
@@ -31,13 +31,7 @@ function PlaySharedPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["share", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .rpc("get_shared_quiz", { share_id: id })
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => getSharedQuiz({ data: { id } }),
   });
 
   if (isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
