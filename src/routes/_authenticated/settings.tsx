@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw, Trash2 } from "lucide-react";
+import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/lib/auth-context";
@@ -14,6 +14,10 @@ import {
   clearSettingsDraft,
   setPlanningEnabledValue,
   setQuizDefaults,
+  getQuickQuizDelete,
+  getQuickGroupDelete,
+  setQuickQuizDeleteValue,
+  setQuickGroupDeleteValue,
   DEFAULT_QUIZ_DEFAULTS,
   type QuizDefaults,
   type StyleSpec,
@@ -46,6 +50,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
 type Form = {
   appLanguage: string;
   planning: boolean;
+  quickQuizDelete: boolean;
+  quickGroupDelete: boolean;
   defaults: QuizDefaults;
 };
 
@@ -69,6 +75,8 @@ function SettingsPage() {
     const current: Form = {
       appLanguage: language,
       planning: getPlanningEnabled(),
+      quickQuizDelete: getQuickQuizDelete(),
+      quickGroupDelete: getQuickGroupDelete(),
       defaults: getQuizDefaults(),
     };
     setSaved(current);
@@ -122,6 +130,8 @@ function SettingsPage() {
   const save = () => {
     setQuizDefaults(form.defaults);
     setPlanningEnabledValue(form.planning);
+    setQuickQuizDeleteValue(form.quickQuizDelete);
+    setQuickGroupDeleteValue(form.quickGroupDelete);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
     clearSettingsDraft();
@@ -134,7 +144,13 @@ function SettingsPage() {
   };
 
   const resetAll = () => {
-    setForm({ appLanguage: "English", planning: true, defaults: DEFAULT_QUIZ_DEFAULTS });
+    setForm({
+      appLanguage: "English",
+      planning: true,
+      quickQuizDelete: false,
+      quickGroupDelete: false,
+      defaults: DEFAULT_QUIZ_DEFAULTS,
+    });
     setTheme("dark");
     setConfirmReset(false);
     toast.success(t("Everything is back to the system default — save to keep it."));
@@ -279,6 +295,41 @@ function SettingsPage() {
             <Switch id="planning" checked={form.planning} onCheckedChange={(v) => patch({ planning: v })} className="shrink-0" />
           </div>
         </section>
+
+        <section className="panel p-4 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Zap className="h-4 w-4 shrink-0 text-primary" /> {t("Quick delete")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("Delete with a single click instead of confirming with “Are you sure?”.")}
+          </p>
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-xl border border-border bg-secondary/40 p-4">
+              <Label htmlFor="quick-quiz" className="min-w-0 cursor-pointer text-sm font-medium">
+                {t("Quick quiz delete")}
+              </Label>
+              <Switch
+                id="quick-quiz"
+                checked={form.quickQuizDelete}
+                onCheckedChange={(v) => patch({ quickQuizDelete: v })}
+                className="shrink-0"
+              />
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-xl border border-border bg-secondary/40 p-4">
+              <Label htmlFor="quick-group" className="min-w-0 cursor-pointer text-sm font-medium">
+                {t("Quick group delete")}
+              </Label>
+              <Switch
+                id="quick-group"
+                checked={form.quickGroupDelete}
+                onCheckedChange={(v) => patch({ quickGroupDelete: v })}
+                className="shrink-0"
+              />
+            </div>
+          </div>
+        </section>
+
+
 
         <section className="panel p-4 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">

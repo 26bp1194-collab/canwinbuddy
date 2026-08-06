@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import logo from "@/assets/canwinbuddy-logo.png.asset.json";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -64,9 +65,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button
             onClick={() => setCollapsed((c) => !c)}
             aria-label="Toggle sidebar"
-            className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+            className="glow-ring group relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
           >
-            {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            <img src={logo.url} alt="CanWinBuddy logo" className="h-full w-full object-cover" />
+            <span className="absolute inset-0 hidden items-center justify-center bg-primary/80 group-hover:flex">
+              {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </span>
           </button>
           {!collapsed && (
             <div className="min-w-0">

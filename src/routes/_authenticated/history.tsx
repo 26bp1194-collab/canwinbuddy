@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight, Star, Pencil, Play, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 
 import { useT } from "@/lib/i18n";
+import { useQuickDelete } from "@/lib/prefs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,6 +68,15 @@ function HistoryPage() {
   const [playAll, setPlayAll] = useState<{ name: string; questions: Question[] } | null>(null);
   const [sort, setSort] = useState<SortKey>("default");
   const [category, setCategory] = useState<CategoryKey>("all");
+  const quick = useQuickDelete();
+  /* id currently showing "Are you sure?" (quizzes and groups share the id space) */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmId) return;
+    const timer = window.setTimeout(() => setConfirmId(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [confirmId]);
 
 
 
@@ -379,8 +389,20 @@ function HistoryPage() {
                       <Play className="mr-2 h-4 w-4" /> {t("Play all")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive" onSelect={() => deleteGroup.mutate(g.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> {t("Delete group")}
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onSelect={(e) => {
+                        if (quick.group) return void deleteGroup.mutate(g.id);
+                        if (confirmId === g.id) {
+                          setConfirmId(null);
+                          return void deleteGroup.mutate(g.id);
+                        }
+                        e.preventDefault();
+                        setConfirmId(g.id);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {confirmId === g.id && !quick.group ? t("Are you sure?") : t("Delete group")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -451,8 +473,20 @@ function HistoryPage() {
                         <FolderPlus className="mr-2 h-4 w-4" /> {t("Create group")}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onSelect={() => del.mutate(row.id)}>
-                        <Trash2 className="mr-2 h-4 w-4" /> {t("Delete")}
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onSelect={(e) => {
+                          if (quick.quiz) return void del.mutate(row.id);
+                          if (confirmId === row.id) {
+                            setConfirmId(null);
+                            return void del.mutate(row.id);
+                          }
+                          e.preventDefault();
+                          setConfirmId(row.id);
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {confirmId === row.id && !quick.quiz ? t("Are you sure?") : t("Delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
