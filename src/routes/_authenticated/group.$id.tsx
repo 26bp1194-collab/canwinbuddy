@@ -1,17 +1,27 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, FileQuestion, Play, Plus, Trash2, FolderX } from "lucide-react";
+import { ArrowLeft, FileQuestion, Play, Plus, Trash2, FolderX, Star, MoreVertical } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { useQuickDelete } from "@/lib/prefs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { QuizGame } from "@/components/quiz-game";
 import type { Question } from "@/lib/ai.functions";
 import {
@@ -37,7 +47,10 @@ export const Route = createFileRoute("/_authenticated/group/$id")({
   component: GroupPage,
 });
 
-type Row = { id: string; title: string; question_count: number; created_at: string };
+type Row = { id: string; title: string; question_count: number; created_at: string; is_favorite: boolean };
+
+type SortKey = "default" | "newest" | "oldest" | "az" | "za" | "most" | "least";
+type CategoryKey = "all" | "favourites";
 
 function GroupPage() {
   const { id } = Route.useParams();
@@ -45,10 +58,27 @@ function GroupPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const quick = useQuickDelete();
   const [addOpen, setAddOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [playing, setPlaying] = useState<{ title: string; questions: Question[] } | null>(null);
   const [loadingPlay, setLoadingPlay] = useState(false);
+  const [sort, setSort] = useState<SortKey>("default");
+  const [category, setCategory] = useState<CategoryKey>("all");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmGroup, setConfirmGroup] = useState(false);
+
+  useEffect(() => {
+    if (!confirmId) return;
+    const timer = window.setTimeout(() => setConfirmId(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [confirmId]);
+
+  useEffect(() => {
+    if (!confirmGroup) return;
+    const timer = window.setTimeout(() => setConfirmGroup(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [confirmGroup]);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -66,7 +96,7 @@ function GroupPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_sets")
-        .select("id, title, question_count, created_at")
+        .select("id, title, question_count, created_at, is_favorite")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as Row[];
@@ -87,6 +117,44 @@ function GroupPage() {
   const groupedElsewhere = new Set((items ?? []).map((i) => i.quiz_set_id));
   const rows = (sets ?? []).filter((r) => memberIds.includes(r.id));
   const available = (sets ?? []).filter((r) => !groupedElsewhere.has(r.id));
+
+  const time = (v: string) => new Date(v).getTime();
+  const visibleRows = [...rows]
+    .filter((r) => (category === "favourites" ? r.is_favorite : true))
+    .sort((a, b) => {
+      switch (sort) {
+        case "newest":
+          return time(b.created_at) - time(a.created_at);
+        case "oldest":
+          return time(a.created_at) - time(b.created_at);
+        case "az":
+          return a.title.localeCompare(b.title);
+        case "za":
+          return b.title.localeCompare(a.title);
+        case "most":
+          return b.question_count - a.question_count;
+        case "least":
+          return a.question_count - b.question_count;
+        default:
+          if (a.is_favorite !== b.is_favorite) return a.is_favorite ? -1 : 1;
+          return time(b.created_at) - time(a.created_at);
+      }
+    });
+
+  const sortOptions: { value: SortKey; label: string }[] = [
+    { value: "default", label: t("Default") },
+    { value: "newest", label: t("Newest") },
+    { value: "oldest", label: t("Oldest") },
+    { value: "az", label: t("A–Z") },
+    { value: "za", label: t("Z–A") },
+    { value: "most", label: t("Most questions") },
+    { value: "least", label: t("Least questions") },
+  ];
+
+  const categoryOptions: { value: CategoryKey; label: string }[] = [
+    { value: "all", label: t("All") },
+    { value: "favourites", label: t("Favourited") },
+  ];
 
   const addMany = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -117,10 +185,36 @@ function GroupPage() {
       qc.invalidateQueries({ queryKey: ["group-items"] });
       toast.success(t("Removed from group"));
     },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not remove quiz"),
+  });
+
+  const deleteQuiz = useMutation({
+    mutationFn: async (quizId: string) => {
+      await supabase.from("quiz_group_items").delete().eq("quiz_set_id", quizId);
+      const { error } = await supabase.from("quiz_sets").delete().eq("id", quizId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["history"] });
+      qc.invalidateQueries({ queryKey: ["group-items"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
+      toast.success(t("Deleted"));
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
+  const toggleQuizFavorite = useMutation({
+    mutationFn: async ({ quizId, value }: { quizId: string; value: boolean }) => {
+      const { error } = await supabase.from("quiz_sets").update({ is_favorite: value }).eq("id", quizId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update quiz"),
   });
 
   const deleteGroup = useMutation({
     mutationFn: async () => {
+      await supabase.from("quiz_group_items").delete().eq("group_id", id);
       const { error } = await supabase.from("quiz_groups").delete().eq("id", id);
       if (error) throw error;
     },
@@ -130,6 +224,7 @@ function GroupPage() {
       toast.success(t("Group deleted"));
       navigate({ to: "/history" });
     },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not delete group"),
   });
 
   const playAll = async () => {
@@ -177,37 +272,99 @@ function GroupPage() {
         </div>
       </motion.div>
 
+      <div className="mt-5 grid grid-cols-1 gap-2 sm:max-w-2xl sm:grid-cols-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-sm text-muted-foreground">{t("Sorting")}</span>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <SelectTrigger aria-label={t("Sorting")} className="min-w-0 flex-1">
+              <SelectValue placeholder={t("Sorting")} />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-sm text-muted-foreground">{t("Category")}</span>
+          <Select value={category} onValueChange={(v) => setCategory(v as CategoryKey)}>
+            <SelectTrigger aria-label={t("Category")} className="min-w-0 flex-1">
+              <SelectValue placeholder={t("Category")} />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !rows.length ? (
+        ) : !visibleRows.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 font-medium">{t("No quizzes in this group yet.")}</p>
-            <Button className="mt-4" onClick={() => setAddOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> {t("Add quiz")}
-            </Button>
+            <p className="mt-3 font-medium">
+              {rows.length ? t("Nothing matches this filter.") : t("No quizzes in this group yet.")}
+            </p>
+            {!rows.length && (
+              <Button className="mt-4" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> {t("Add quiz")}
+              </Button>
+            )}
           </div>
         ) : (
           <ul className="space-y-3">
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <motion.li key={row.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="panel">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-5">
-                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1 p-2 pl-4 sm:gap-2 sm:p-4 sm:pl-5">
+                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 py-2">
                     <p className="truncate font-medium">{row.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {row.question_count} {t("questions")} · {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
                     </p>
                   </Link>
                   <Button
-                    size="icon"
                     variant="ghost"
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    aria-label={`Remove ${row.title} from group`}
-                    onClick={() => remove.mutate(row.id)}
+                    size="icon"
+                    aria-label={row.is_favorite ? t("Unfavourite quiz") : t("Favourite quiz")}
+                    onClick={() => toggleQuizFavorite.mutate({ quizId: row.id, value: !row.is_favorite })}
                   >
-                    <FolderX className="h-4 w-4" />
+                    <Star className={row.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${row.title}`}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel className="max-w-[220px] truncate">{row.title}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => remove.mutate(row.id)}>
+                        <FolderX className="mr-2 h-4 w-4" /> {t("Remove from group")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onSelect={(e) => {
+                          if (quick.quiz) return void deleteQuiz.mutate(row.id);
+                          if (confirmId === row.id) {
+                            setConfirmId(null);
+                            return void deleteQuiz.mutate(row.id);
+                          }
+                          e.preventDefault();
+                          setConfirmId(row.id);
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {confirmId === row.id && !quick.quiz ? t("Are you sure?") : t("Delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </motion.li>
             ))}
@@ -215,8 +372,19 @@ function GroupPage() {
         )}
       </div>
 
-      <Button variant="ghost" className="mt-6 text-destructive" onClick={() => deleteGroup.mutate()}>
-        <Trash2 className="mr-2 h-4 w-4" /> {t("Delete group")}
+      <Button
+        variant="ghost"
+        className="mt-6 text-destructive"
+        onClick={() => {
+          if (quick.group || confirmGroup) {
+            setConfirmGroup(false);
+            deleteGroup.mutate();
+          } else {
+            setConfirmGroup(true);
+          }
+        }}
+      >
+        <Trash2 className="mr-2 h-4 w-4" /> {confirmGroup && !quick.group ? t("Are you sure?") : t("Delete group")}
       </Button>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

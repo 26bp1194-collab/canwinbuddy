@@ -238,6 +238,43 @@ export function formatMs(ms: number) {
   return `${m}m ${Math.round(s - m * 60)}s`;
 }
 
+/* ---------------- Quick delete (skip the "Are you sure?" step) ---------------- */
+
+const QUICK_QUIZ_KEY = "cwb:quick-delete-quiz";
+const QUICK_GROUP_KEY = "cwb:quick-delete-group";
+
+export function getQuickQuizDelete(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(QUICK_QUIZ_KEY) === "on";
+}
+
+export function getQuickGroupDelete(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(QUICK_GROUP_KEY) === "on";
+}
+
+export function setQuickQuizDeleteValue(value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(QUICK_QUIZ_KEY, value ? "on" : "off");
+}
+
+export function setQuickGroupDeleteValue(value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(QUICK_GROUP_KEY, value ? "on" : "off");
+}
+
+/** Live values for the History/Group pages (re-reads on mount). */
+export function useQuickDelete() {
+  const [state, setState] = useState({ quiz: false, group: false });
+  useEffect(() => {
+    setState({ quiz: getQuickQuizDelete(), group: getQuickGroupDelete() });
+    const onStorage = () => setState({ quiz: getQuickQuizDelete(), group: getQuickGroupDelete() });
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  return state;
+}
+
 /* ---------------- Direct setters (used by the Settings save bar) ---------------- */
 
 export function setPlanningEnabledValue(value: boolean) {
