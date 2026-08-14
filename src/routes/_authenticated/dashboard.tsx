@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/lib/i18n";
 import { formatDistanceToNow } from "date-fns";
+import logo from "@/assets/canwinbuddy-logo.png.asset.json";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
