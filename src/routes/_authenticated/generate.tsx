@@ -15,6 +15,7 @@ import {
   formatMs,
   getDraft,
   getQuizDefaults,
+  quizDefaultsSignature,
   saveDraft,
   saveTimings,
   DEFAULT_SPEC,
@@ -143,7 +144,7 @@ function GeneratePage() {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs });
+    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs, defaultsSig: quizDefaultsSignature() });
   }, [source, title, count, countText, difficulty, spec, mode, specs]);
 
 
