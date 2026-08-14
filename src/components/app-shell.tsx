@@ -19,7 +19,7 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import logo from "@/assets/canwinbuddy-logo.png.asset.json";
 
 const nav = [
@@ -54,39 +54,39 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="flex min-h-screen w-full bg-background">
       <motion.aside
-        animate={{ width: collapsed ? 72 : 248 }}
+        animate={{ width: collapsed ? 76 : 248 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
-        className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex"
+        className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar md:flex"
       >
 
-        <div className={cn("flex items-center gap-3 px-4 py-5", collapsed && "justify-center px-2")}>
-          {!collapsed ? (
+        <div className="flex items-center gap-3 px-4 py-5">
+          <img
+            src={logo.url}
+            alt="CanWinBuddy logo"
+            className="h-9 w-9 shrink-0 rounded-2xl object-cover bg-primary/10"
+          />
+          {!collapsed && (
             <>
-              <img
-                src={logo.url}
-                alt="CanWinBuddy logo"
-                className="h-9 w-9 shrink-0 rounded-2xl object-cover bg-primary/10"
-              />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-sm font-semibold">CanWinBuddy</p>
                 <p className="truncate text-xs text-muted-foreground">@{username ?? "you"}</p>
               </div>
-              <button
-                onClick={() => setCollapsed((c) => !c)}
-                aria-label="Collapse sidebar"
-                className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setCollapsed(true)}
+                    aria-label="Collapse sidebar"
+                    className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform hover:scale-105"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{t("Collapse")}</TooltipContent>
+              </Tooltip>
             </>
-          ) : (
-            <img
-              src={logo.url}
-              alt="CanWinBuddy logo"
-              className="h-9 w-9 rounded-2xl object-cover bg-primary/10"
-            />
           )}
         </div>
 
@@ -94,56 +94,89 @@ export function AppShell({ children }: { children: ReactNode }) {
           {nav.map((item) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
-            return (
+            const link = (
               <Link
                 key={item.to}
                 to={item.to}
+                aria-label={t(item.label)}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "group relative flex items-center gap-3 overflow-hidden rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
                   active
                     ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-12px] shadow-primary/60"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  collapsed && "justify-center px-0",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {!collapsed && <span className="truncate">{t(item.label)}</span>}
               </Link>
             );
+            if (!collapsed) return link;
+            return (
+              <Tooltip key={item.to}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">{t(item.label)}</TooltipContent>
+              </Tooltip>
+            );
           })}
         </nav>
 
-        <div className={cn("space-y-2 border-t border-sidebar-border p-3", collapsed && "px-2")}>
+        <div className="space-y-2 border-t border-sidebar-border p-3">
           {collapsed && (
-            <button
-              onClick={() => setCollapsed((c) => !c)}
-              aria-label="Expand sidebar"
-              className="glow-ring flex h-9 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setCollapsed(false)}
+                  aria-label="Expand sidebar"
+                  className="glow-ring flex h-9 w-full items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform hover:scale-105"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{t("Expand")}</TooltipContent>
+            </Tooltip>
           )}
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className={cn(
-              "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              collapsed && "justify-center px-0",
-            )}
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {!collapsed && <span>{theme === "dark" ? t("Light mode") : t("Dark mode")}</span>}
-          </button>
-          <Button
-            variant="ghost"
-            onClick={handleSignOut}
-            className={cn("w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground", collapsed && "justify-center")}
-          >
-            <LogOut className="h-4 w-4" />
-            {!collapsed && t("Log out")}
-          </Button>
+          {(() => {
+            const themeLabel = theme === "dark" ? t("Light mode") : t("Dark mode");
+            const btn = (
+              <button
+                onClick={toggle}
+                aria-label="Toggle theme"
+                className="flex w-full items-center gap-3 overflow-hidden rounded-full px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+                {!collapsed && <span className="truncate">{themeLabel}</span>}
+              </button>
+            );
+            if (!collapsed) return btn;
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>{btn}</TooltipTrigger>
+                <TooltipContent side="right">{themeLabel}</TooltipContent>
+              </Tooltip>
+            );
+          })()}
+          {(() => {
+            const btn = (
+              <button
+                onClick={handleSignOut}
+                aria-label={t("Log out")}
+                className="flex w-full items-center gap-3 overflow-hidden rounded-full px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="truncate">{t("Log out")}</span>}
+              </button>
+            );
+            if (!collapsed) return btn;
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>{btn}</TooltipTrigger>
+                <TooltipContent side="right">{t("Log out")}</TooltipContent>
+              </Tooltip>
+            );
+          })()}
         </div>
       </motion.aside>
+
 
       <main className="flex-1 min-w-0">
         {children}
@@ -181,6 +214,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
     </div>
+    </TooltipProvider>
   );
+
 
 }
