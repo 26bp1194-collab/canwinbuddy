@@ -45,11 +45,27 @@ function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <p className="truncate text-sm text-muted-foreground">{t("Welcome back")}, @{username}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">{t("Your Quiz Dashboard")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground sm:text-base">{t("Your intelligent question workspace — ready to generate.")}</p>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-start gap-4"
+      >
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <img
+            src={logo.url}
+            alt="CanWinBuddy logo"
+            className="h-12 w-12 rounded-2xl bg-primary/10 object-cover sm:h-14 sm:w-14"
+          />
+          <span className="font-display text-[11px] font-semibold text-muted-foreground">CanWinBuddy</span>
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm text-muted-foreground">{t("Welcome back")}, @{username}</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">{t("Your Quiz Dashboard")}</h1>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">{t("Your intelligent question workspace — ready to generate.")}</p>
+        </div>
       </motion.div>
+
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         <StatCard icon={FileQuestion} label={t("Quiz sets created")} value={stats?.total ?? 0} />
