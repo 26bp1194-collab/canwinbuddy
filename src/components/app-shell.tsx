@@ -19,7 +19,7 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import logo from "@/assets/canwinbuddy-logo.png.asset.json";
 
 const nav = [
