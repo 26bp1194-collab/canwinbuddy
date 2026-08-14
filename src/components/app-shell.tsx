@@ -114,6 +114,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className={cn("space-y-2 border-t border-sidebar-border p-3", collapsed && "px-2")}>
+          {collapsed && (
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label="Expand sidebar"
+              className="glow-ring flex h-9 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={toggle}
             aria-label="Toggle theme"
