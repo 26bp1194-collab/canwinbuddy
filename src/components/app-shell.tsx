@@ -62,21 +62,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
 
         <div className={cn("flex items-center gap-3 px-4 py-5", collapsed && "justify-center px-2")}>
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            aria-label="Toggle sidebar"
-            className="glow-ring group relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
-          >
-            <img src={logo.url} alt="CanWinBuddy logo" className="h-full w-full object-cover" />
-            <span className="absolute inset-0 hidden items-center justify-center bg-primary/80 group-hover:flex">
-              {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </span>
-          </button>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate font-display text-sm font-semibold">CanWinBuddy</p>
-              <p className="truncate text-xs text-muted-foreground">@{username ?? "you"}</p>
-            </div>
+          {!collapsed ? (
+            <>
+              <img
+                src={logo.url}
+                alt="CanWinBuddy logo"
+                className="h-9 w-9 shrink-0 rounded-2xl object-cover bg-primary/10"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-display text-sm font-semibold">CanWinBuddy</p>
+                <p className="truncate text-xs text-muted-foreground">@{username ?? "you"}</p>
+              </div>
+              <button
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label="Collapse sidebar"
+                className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <img
+              src={logo.url}
+              alt="CanWinBuddy logo"
+              className="h-9 w-9 rounded-2xl object-cover bg-primary/10"
+            />
           )}
         </div>
 
@@ -104,6 +114,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className={cn("space-y-2 border-t border-sidebar-border p-3", collapsed && "px-2")}>
+          {collapsed && (
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label="Expand sidebar"
+              className="glow-ring flex h-9 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={toggle}
             aria-label="Toggle theme"
