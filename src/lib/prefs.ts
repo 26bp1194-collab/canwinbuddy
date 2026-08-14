@@ -172,7 +172,16 @@ export type GenerateDraft = {
   spec?: StyleSpec;
   mode?: "simple" | "advanced";
   specs?: { simple: StyleSpec; advanced: StyleSpec };
+  /** Signature of the user's quiz defaults when the draft was saved. */
+  defaultsSig?: string;
 };
+
+/** Stable signature of the current default quiz settings. */
+export function quizDefaultsSignature(): string {
+  const d = getQuizDefaults();
+  return JSON.stringify([d.count, d.difficulty, d.spec, d.specAdvanced]);
+}
+
 
 /* sessionStorage: kept while navigating inside the same tab, fresh in a new tab */
 function draftStore(): Storage | null {

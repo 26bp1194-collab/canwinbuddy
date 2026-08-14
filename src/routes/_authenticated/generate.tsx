@@ -15,6 +15,7 @@ import {
   formatMs,
   getDraft,
   getQuizDefaults,
+  quizDefaultsSignature,
   saveDraft,
   saveTimings,
   DEFAULT_SPEC,
@@ -87,9 +88,14 @@ function GeneratePage() {
   useEffect(() => {
     const draft = getDraft();
     const defaults = getQuizDefaults();
+    /* If the user changed their defaults in Settings, the draft's saved
+       customisation is stale — start from the new defaults instead. */
+    const useDraftSettings = !!draft && draft.defaultsSig === quizDefaultsSignature();
     if (draft) {
       setSource(draft.source);
       setTitle(draft.title);
+    }
+    if (draft && useDraftSettings) {
       setCountText(draft.countText ?? String(draft.count));
       setDifficulty(draft.difficulty);
       setMode(draft.mode ?? "simple");
@@ -100,11 +106,13 @@ function GeneratePage() {
     } else {
       setCountText(String(defaults.count));
       setDifficulty(defaults.difficulty);
+      setMode("simple");
       setSpecs({
         simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
         advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
       });
     }
+
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
     if (raw) {
@@ -136,7 +144,7 @@ function GeneratePage() {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs });
+    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs, defaultsSig: quizDefaultsSignature() });
   }, [source, title, count, countText, difficulty, spec, mode, specs]);
 
 
