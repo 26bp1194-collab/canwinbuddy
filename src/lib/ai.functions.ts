@@ -479,7 +479,7 @@ ${MATH_RULES}`;
       system = `${base}
 - You are in SOURCE FINDER mode: gather and compile the most relevant, accurate real-world information about the described topic from your knowledge of published sources.
 - Be comprehensive and specific: include key facts, figures, dates, names, definitions and relationships a quiz could test.
-- Only state information you are confident is accurate. Do not invent statistics or citations.`;
+- Fact-check the compiled information before returning it: only state information you are confident is accurate, and drop anything doubtful. Do not invent statistics or citations.
       user = `Information description: ${instruction}${planBlock(planAnswers)}`;
     } else {
       const asked: string[] = [];
