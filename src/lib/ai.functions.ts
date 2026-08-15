@@ -463,7 +463,8 @@ export const aiTextHelper = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { mode, instruction, existingText, actions, planAnswers, brief } = data;
 
-    const VOLUME = `- The text must be rich enough to write at least 100 distinct multiple-choice quiz questions from it. Aim for 1200+ words packed with separate, testable facts (definitions, dates, names, numbers, causes, effects, examples, comparisons). Never pad with filler or repetition — every sentence should add new testable information.`;
+    const VOLUME = `- The text must be rich enough to write at least 150 distinct multiple-choice quiz questions from it. Aim for 1800+ words packed with separate, testable facts (definitions, dates, names, numbers, causes, effects, examples, comparisons). Never pad with filler or repetition — every sentence should add new testable information.
+- FACT-CHECK EVERYTHING before returning it: verify each fact, figure, date, name and relationship against what you reliably know, correct anything wrong, and silently drop any claim you cannot stand behind. Never invent statistics, quotes or citations.`;
 
     const base = `You are a writing assistant that produces study/reference text suitable for generating quiz questions from. Rules:
 - Return ONLY the finished text as plain prose. No preamble, no markdown headers, no commentary, no quotes.
