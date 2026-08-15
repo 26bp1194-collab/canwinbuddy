@@ -357,8 +357,8 @@ const ReviewInput = z.object({
 
 });
 
-const MAX_ATTEMPTS_PER_ITEM = 2;
-const GLOBAL_REGEN_CAP = 12;
+const MAX_REVIEW_ROUNDS = 5;
+const GLOBAL_REGEN_CAP = 60;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -368,66 +368,66 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
 
-    const reviews = await reviewBatch(sourceText, questions, difficulty, spec);
-
-    const verdict = new Map(reviews.map((r) => [r.index, r]));
-
-    const accepted: Question[] = [];
-    const failures: Array<{ q: Question; issues: string[] }> = [];
-    questions.forEach((q, i) => {
-      const r = verdict.get(i);
-      if (r && !r.pass) failures.push({ q, issues: r.issues });
-      else accepted.push(q);
-    });
-
+    /* Questions are never deleted — failing ones are regenerated in place and
+       re-verified, for up to 5 rounds. After that the current version is kept. */
+    const current: Question[] = [...questions];
     let regenerated = 0;
     let budget = GLOBAL_REGEN_CAP;
+    let rounds = 0;
+    let stillFailing = 0;
 
-    for (const failure of failures) {
-      let issues = failure.issues;
-      let current = failure.q;
-      let fixed = false;
-      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_ITEM && budget > 0; attempt++) {
+    for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
+      rounds = round + 1;
+      const reviews = await reviewBatch(sourceText, current, difficulty, spec);
+      const verdict = new Map(reviews.map((r) => [r.index, r]));
+
+      const failing: Array<{ index: number; issues: string[] }> = [];
+      current.forEach((_, i) => {
+        const r = verdict.get(i);
+        if (r && !r.pass) failing.push({ index: i, issues: r.issues });
+      });
+
+      stillFailing = failing.length;
+      if (failing.length === 0) break;
+
+      let changed = false;
+      for (const f of failing) {
+        if (budget <= 0) break;
         budget--;
-        const replacement = await regenerateOne(sourceText, difficulty, analysis, current, issues, accepted, spec);
+        const others = current.filter((_, i) => i !== f.index);
+        const replacement = await regenerateOne(
+          sourceText,
+          difficulty,
+          analysis,
+          current[f.index],
+          f.issues,
+          others,
+          spec,
+        );
         if (!replacement) continue;
-        if (!validateQuestion(replacement, sourceNorm)) {
-          current = replacement;
-          issues = ["The sourceQuote was not a verbatim substring of the notes. Copy exact text from the source."];
-          continue;
-        }
-        if (accepted.some((a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim())) {
-          current = replacement;
-          issues = ["Duplicate of an already-accepted question. Cover a different topic."];
-          continue;
-        }
-        const [check] = await reviewBatch(sourceText, [replacement], difficulty, spec);
-        if (check && !check.pass) {
-          current = replacement;
-          issues = check.issues;
-          continue;
-        }
-        accepted.push(replacement);
+        const dupe = others.some(
+          (a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim(),
+        );
+        /* Only swap in a replacement that is grounded in the notes and not a duplicate */
+        if (dupe || !validateQuestion(replacement, sourceNorm)) continue;
+        current[f.index] = replacement;
         regenerated++;
-        fixed = true;
-        break;
+        changed = true;
       }
-      // If still failing after the caps, drop it rather than saving a bad question.
-      if (!fixed) continue;
-    }
-
-    if (accepted.length === 0) {
-      throw new Error("Couldn't produce questions that passed review. Try adding more detailed source content.");
+      if (!changed) break;
     }
 
     return {
-      questions: accepted.slice(0, requested),
+      questions: current.slice(0, requested),
       requested,
       reviewed: questions.length,
       regenerated,
-      dropped: failures.length - regenerated,
+      rounds,
+      stillFailing,
+      dropped: 0,
     };
   });
+
 
 
 /* ---------------- AI Text Helper ---------------- */
