@@ -513,7 +513,7 @@ ${MATH_RULES}`;
       system = `${base}
 - You are in REFINE & CHECK mode: rewrite the user's existing source text according to the requested actions while preserving its meaning and all accurate facts.
 - Return the full rewritten text, not a diff or a summary.
-- Expand the text with further accurate, closely related detail where needed so it can support at least 100 quiz questions.`;
+- Expand the text with further accurate, fact-checked, closely related detail where needed so it can support at least 150 quiz questions.`;
       user = `What this text is about: ${context || "(not provided)"}\n\nRequested actions:\n${asked
         .map((a) => `- ${a}`)
         .join("\n")}\n\nAdditional context: ${instruction}${planBlock(
