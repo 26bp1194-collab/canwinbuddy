@@ -194,15 +194,15 @@ function GeneratePage() {
       setTimings([]);
       setTotalMs(0);
 
+      setStage("extracting");
+      const t0 = performance.now();
       if (files.length > 0) {
-        setStage("extracting");
-        const t0 = performance.now();
         for (const f of files) {
           const text = await parseFile(f);
           combined += (combined ? "\n\n" : "") + `[${f.name}]\n${text}`;
         }
-        mark("Extracting source content", t0);
       }
+      mark("Extracting source content", t0);
 
       if (combined.length < 30) {
         toast.error(t("Source content is too short to generate meaningful questions."));
@@ -220,14 +220,15 @@ function GeneratePage() {
       const generated = await generateQuestions({
         data: { sourceText: combined, count, difficulty, spec, analysis },
       });
-      mark("Generating questions", t1);
+      mark("Generating quiz", t1);
 
       setStage("reviewing");
       const t2 = performance.now();
       const { questions } = await reviewAndRepair({
         data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis },
       });
-      mark("AI reviewing questions", t2);
+      mark("Reviewing quiz", t2);
+
 
       setStage("saving");
       const t3 = performance.now();
@@ -244,7 +245,7 @@ function GeneratePage() {
         .select("id")
         .single();
       if (error) throw error;
-      mark("Saving your set", t3);
+      mark("Saving set", t3);
 
       const total = performance.now() - started;
       setTotalMs(total);
@@ -555,9 +556,9 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
   const steps: Array<{ id: Stage; label: string }> = [
     { id: "extracting", label: "Extracting source content" },
     { id: "analyzing", label: "Analyzing notes" },
-    { id: "generating", label: "Generating questions" },
-    { id: "reviewing", label: "AI reviewing questions" },
-    { id: "saving", label: "Saving your set" },
+    { id: "generating", label: "Generating quiz" },
+    { id: "reviewing", label: "Reviewing quiz" },
+    { id: "saving", label: "Saving set" },
     { id: "done", label: "Complete" },
   ];
   const order: Stage[] = ["input", "extracting", "analyzing", "generating", "reviewing", "saving", "done"];

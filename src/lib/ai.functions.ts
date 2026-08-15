@@ -101,7 +101,14 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
   return false;
 }
 
-const BATCH = 15;
+/* Batch size scales with the requested amount:
+   1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
+function batchSize(count: number) {
+  if (count <= 25) return 1;
+  if (count <= 50) return 2;
+  if (count <= 75) return 3;
+  return 4;
+}
 
 /* ---------------- 1. Analyze ---------------- */
 
@@ -114,6 +121,7 @@ const AnalyzeInput = z.object({
 const AnalysisSchema = z.object({
   topics: z.array(z.string()).min(1),
   keyFacts: z.array(z.string()),
+  summaries: z.array(z.string()).default([]),
   coverageNotes: z.string(),
 });
 
@@ -124,10 +132,12 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => AnalyzeInput.parse(raw))
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty } = data;
-    const system = `You analyse study notes so quiz questions can be written from them later.
-- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"coverageNotes":string}
+    const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string}
+- Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
 - "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
+- "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}`;
@@ -141,12 +151,14 @@ ${MATH_RULES}`;
       return {
         topics: parsed.topics.slice(0, 12),
         keyFacts: parsed.keyFacts.slice(0, 20),
+        summaries: (parsed.summaries ?? []).slice(0, 12),
         coverageNotes: parsed.coverageNotes,
       } satisfies Analysis;
     } catch {
-      return { topics: [], keyFacts: [], coverageNotes: "" } as Analysis;
+      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "" } as Analysis;
     }
   });
+
 
 /* ---------------- 2. Generate ---------------- */
 
@@ -157,6 +169,10 @@ function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: 
   const facts = analysis?.keyFacts?.length
     ? `\n\nKEY FACTS FROM THE NOTES:\n${analysis.keyFacts.map((f) => `- ${f}`).join("\n")}`
     : "";
+  const sums = analysis?.summaries?.length
+    ? `\n\nSECTION SUMMARIES OF THE NOTES (use alongside the full source text):\n${analysis.summaries.map((s) => `- ${s}`).join("\n")}`
+    : "";
+
   return `You generate multiple-choice quiz questions from provided source material. Rules:
 - Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
 - Each "sourceQuote" MUST be a verbatim substring copied directly from the source (10-30 words) that supports the correct answer. Never paraphrase it.
@@ -181,7 +197,7 @@ STYLE:
 - Do not repeat or lightly rephrase questions already accepted.
 
 ${SELF_CONTAINED}
-${MATH_RULES}${styleBlock(spec)}${topics}${facts}`;
+${MATH_RULES}${styleBlock(spec)}${topics}${facts}${sums}`;
 }
 
 const GenerateInput = InputSchema.extend({
@@ -197,15 +213,16 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const sourceNorm = normalize(sourceText);
     const systemPrompt = genSystemPrompt(difficulty, analysis, spec);
 
-
+    const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxAttempts = Math.min(20, Math.ceil(count / BATCH) * 3 + 3);
+    const maxAttempts = Math.ceil(count / batch) + 8;
     let attempts = 0;
 
     while (validated.length < count && attempts < maxAttempts) {
       attempts++;
-      const need = Math.min(count - validated.length, BATCH);
+      const need = Math.min(count - validated.length, batch);
+
       const avoid = validated.slice(-25).map((q) => q.question);
       const userPrompt = `Generate ${need} quiz questions from this source. Return valid JSON only.${
         analysis?.topics?.length ? `\n\nAllocate the ${need} questions across the analysed topics as evenly as possible.` : ""
@@ -261,13 +278,14 @@ const ReviewSchema = z.object({
 const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
-Check each question for:
-1. Is the marked correct choice actually supported by its sourceQuote and the surrounding notes?
-2. Are all distractors plausible and non-joke, similar in length and grammar, with only one correct answer?
-3. Does the difficulty roughly match "${difficulty}"?
+Check each question, in this order:
+1. GROUNDING (check first): does the question, and above all the marked correct answer, follow the notes exactly? Fail it if the correct answer is not stated or directly supported by the notes, if the sourceQuote is not really from the notes, or if it contradicts the notes.
+2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
+3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
 5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
 Each issue is one short, actionable sentence.${styleBlock(spec)}`;
+
 
 async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null) {
   const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
@@ -339,8 +357,8 @@ const ReviewInput = z.object({
 
 });
 
-const MAX_ATTEMPTS_PER_ITEM = 2;
-const GLOBAL_REGEN_CAP = 12;
+const MAX_REVIEW_ROUNDS = 5;
+const GLOBAL_REGEN_CAP = 60;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -350,66 +368,66 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
 
-    const reviews = await reviewBatch(sourceText, questions, difficulty, spec);
-
-    const verdict = new Map(reviews.map((r) => [r.index, r]));
-
-    const accepted: Question[] = [];
-    const failures: Array<{ q: Question; issues: string[] }> = [];
-    questions.forEach((q, i) => {
-      const r = verdict.get(i);
-      if (r && !r.pass) failures.push({ q, issues: r.issues });
-      else accepted.push(q);
-    });
-
+    /* Questions are never deleted — failing ones are regenerated in place and
+       re-verified, for up to 5 rounds. After that the current version is kept. */
+    const current: Question[] = [...questions];
     let regenerated = 0;
     let budget = GLOBAL_REGEN_CAP;
+    let rounds = 0;
+    let stillFailing = 0;
 
-    for (const failure of failures) {
-      let issues = failure.issues;
-      let current = failure.q;
-      let fixed = false;
-      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_ITEM && budget > 0; attempt++) {
+    for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
+      rounds = round + 1;
+      const reviews = await reviewBatch(sourceText, current, difficulty, spec);
+      const verdict = new Map(reviews.map((r) => [r.index, r]));
+
+      const failing: Array<{ index: number; issues: string[] }> = [];
+      current.forEach((_, i) => {
+        const r = verdict.get(i);
+        if (r && !r.pass) failing.push({ index: i, issues: r.issues });
+      });
+
+      stillFailing = failing.length;
+      if (failing.length === 0) break;
+
+      let changed = false;
+      for (const f of failing) {
+        if (budget <= 0) break;
         budget--;
-        const replacement = await regenerateOne(sourceText, difficulty, analysis, current, issues, accepted, spec);
+        const others = current.filter((_, i) => i !== f.index);
+        const replacement = await regenerateOne(
+          sourceText,
+          difficulty,
+          analysis,
+          current[f.index],
+          f.issues,
+          others,
+          spec,
+        );
         if (!replacement) continue;
-        if (!validateQuestion(replacement, sourceNorm)) {
-          current = replacement;
-          issues = ["The sourceQuote was not a verbatim substring of the notes. Copy exact text from the source."];
-          continue;
-        }
-        if (accepted.some((a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim())) {
-          current = replacement;
-          issues = ["Duplicate of an already-accepted question. Cover a different topic."];
-          continue;
-        }
-        const [check] = await reviewBatch(sourceText, [replacement], difficulty, spec);
-        if (check && !check.pass) {
-          current = replacement;
-          issues = check.issues;
-          continue;
-        }
-        accepted.push(replacement);
+        const dupe = others.some(
+          (a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim(),
+        );
+        /* Only swap in a replacement that is grounded in the notes and not a duplicate */
+        if (dupe || !validateQuestion(replacement, sourceNorm)) continue;
+        current[f.index] = replacement;
         regenerated++;
-        fixed = true;
-        break;
+        changed = true;
       }
-      // If still failing after the caps, drop it rather than saving a bad question.
-      if (!fixed) continue;
-    }
-
-    if (accepted.length === 0) {
-      throw new Error("Couldn't produce questions that passed review. Try adding more detailed source content.");
+      if (!changed) break;
     }
 
     return {
-      questions: accepted.slice(0, requested),
+      questions: current.slice(0, requested),
       requested,
       reviewed: questions.length,
       regenerated,
-      dropped: failures.length - regenerated,
+      rounds,
+      stillFailing,
+      dropped: 0,
     };
   });
+
 
 
 /* ---------------- AI Text Helper ---------------- */
@@ -445,7 +463,8 @@ export const aiTextHelper = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { mode, instruction, existingText, actions, planAnswers, brief } = data;
 
-    const VOLUME = `- The text must be rich enough to write at least 100 distinct multiple-choice quiz questions from it. Aim for 1200+ words packed with separate, testable facts (definitions, dates, names, numbers, causes, effects, examples, comparisons). Never pad with filler or repetition — every sentence should add new testable information.`;
+    const VOLUME = `- The text must be rich enough to write at least 150 distinct multiple-choice quiz questions from it. Aim for 1800+ words packed with separate, testable facts (definitions, dates, names, numbers, causes, effects, examples, comparisons). Never pad with filler or repetition — every sentence should add new testable information.
+- FACT-CHECK EVERYTHING before returning it: verify each fact, figure, date, name and relationship against what you reliably know, correct anything wrong, and silently drop any claim you cannot stand behind. Never invent statistics, quotes or citations.`;
 
     const base = `You are a writing assistant that produces study/reference text suitable for generating quiz questions from. Rules:
 - Return ONLY the finished text as plain prose. No preamble, no markdown headers, no commentary, no quotes.
@@ -460,7 +479,7 @@ ${MATH_RULES}`;
       system = `${base}
 - You are in SOURCE FINDER mode: gather and compile the most relevant, accurate real-world information about the described topic from your knowledge of published sources.
 - Be comprehensive and specific: include key facts, figures, dates, names, definitions and relationships a quiz could test.
-- Only state information you are confident is accurate. Do not invent statistics or citations.`;
+- Fact-check the compiled information before returning it: only state information you are confident is accurate, and drop anything doubtful. Do not invent statistics or citations.`;
       user = `Information description: ${instruction}${planBlock(planAnswers)}`;
     } else {
       const asked: string[] = [];
@@ -494,7 +513,7 @@ ${MATH_RULES}`;
       system = `${base}
 - You are in REFINE & CHECK mode: rewrite the user's existing source text according to the requested actions while preserving its meaning and all accurate facts.
 - Return the full rewritten text, not a diff or a summary.
-- Expand the text with further accurate, closely related detail where needed so it can support at least 100 quiz questions.`;
+- Expand the text with further accurate, fact-checked, closely related detail where needed so it can support at least 150 quiz questions.`;
       user = `What this text is about: ${context || "(not provided)"}\n\nRequested actions:\n${asked
         .map((a) => `- ${a}`)
         .join("\n")}\n\nAdditional context: ${instruction}${planBlock(
