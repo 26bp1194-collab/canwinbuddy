@@ -169,6 +169,10 @@ function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: 
   const facts = analysis?.keyFacts?.length
     ? `\n\nKEY FACTS FROM THE NOTES:\n${analysis.keyFacts.map((f) => `- ${f}`).join("\n")}`
     : "";
+  const sums = analysis?.summaries?.length
+    ? `\n\nSECTION SUMMARIES OF THE NOTES (use alongside the full source text):\n${analysis.summaries.map((s) => `- ${s}`).join("\n")}`
+    : "";
+
   return `You generate multiple-choice quiz questions from provided source material. Rules:
 - Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
 - Each "sourceQuote" MUST be a verbatim substring copied directly from the source (10-30 words) that supports the correct answer. Never paraphrase it.
