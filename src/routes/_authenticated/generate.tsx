@@ -194,15 +194,15 @@ function GeneratePage() {
       setTimings([]);
       setTotalMs(0);
 
+      setStage("extracting");
+      const t0 = performance.now();
       if (files.length > 0) {
-        setStage("extracting");
-        const t0 = performance.now();
         for (const f of files) {
           const text = await parseFile(f);
           combined += (combined ? "\n\n" : "") + `[${f.name}]\n${text}`;
         }
-        mark("Extracting source content", t0);
       }
+      mark("Extracting source content", t0);
 
       if (combined.length < 30) {
         toast.error(t("Source content is too short to generate meaningful questions."));
@@ -220,14 +220,15 @@ function GeneratePage() {
       const generated = await generateQuestions({
         data: { sourceText: combined, count, difficulty, spec, analysis },
       });
-      mark("Generating questions", t1);
+      mark("Generating quiz", t1);
 
       setStage("reviewing");
       const t2 = performance.now();
       const { questions } = await reviewAndRepair({
         data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis },
       });
-      mark("AI reviewing questions", t2);
+      mark("Reviewing quiz", t2);
+
 
       setStage("saving");
       const t3 = performance.now();
