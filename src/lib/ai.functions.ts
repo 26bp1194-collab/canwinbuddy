@@ -101,7 +101,14 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
   return false;
 }
 
-const BATCH = 15;
+/* Batch size scales with the requested amount:
+   1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
+function batchSize(count: number) {
+  if (count <= 25) return 1;
+  if (count <= 50) return 2;
+  if (count <= 75) return 3;
+  return 4;
+}
 
 /* ---------------- 1. Analyze ---------------- */
 
@@ -114,6 +121,7 @@ const AnalyzeInput = z.object({
 const AnalysisSchema = z.object({
   topics: z.array(z.string()).min(1),
   keyFacts: z.array(z.string()),
+  summaries: z.array(z.string()).default([]),
   coverageNotes: z.string(),
 });
 
@@ -124,10 +132,12 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => AnalyzeInput.parse(raw))
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty } = data;
-    const system = `You analyse study notes so quiz questions can be written from them later.
-- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"coverageNotes":string}
+    const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string}
+- Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
 - "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
+- "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}`;
@@ -141,12 +151,14 @@ ${MATH_RULES}`;
       return {
         topics: parsed.topics.slice(0, 12),
         keyFacts: parsed.keyFacts.slice(0, 20),
+        summaries: (parsed.summaries ?? []).slice(0, 12),
         coverageNotes: parsed.coverageNotes,
       } satisfies Analysis;
     } catch {
-      return { topics: [], keyFacts: [], coverageNotes: "" } as Analysis;
+      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "" } as Analysis;
     }
   });
+
 
 /* ---------------- 2. Generate ---------------- */
 
