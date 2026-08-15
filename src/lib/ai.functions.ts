@@ -278,13 +278,14 @@ const ReviewSchema = z.object({
 const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
-Check each question for:
-1. Is the marked correct choice actually supported by its sourceQuote and the surrounding notes?
-2. Are all distractors plausible and non-joke, similar in length and grammar, with only one correct answer?
-3. Does the difficulty roughly match "${difficulty}"?
+Check each question, in this order:
+1. GROUNDING (check first): does the question, and above all the marked correct answer, follow the notes exactly? Fail it if the correct answer is not stated or directly supported by the notes, if the sourceQuote is not really from the notes, or if it contradicts the notes.
+2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
+3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
 5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
 Each issue is one short, actionable sentence.${styleBlock(spec)}`;
+
 
 async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null) {
   const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
