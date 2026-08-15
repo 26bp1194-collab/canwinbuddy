@@ -197,7 +197,7 @@ STYLE:
 - Do not repeat or lightly rephrase questions already accepted.
 
 ${SELF_CONTAINED}
-${MATH_RULES}${styleBlock(spec)}${topics}${facts}`;
+${MATH_RULES}${styleBlock(spec)}${topics}${facts}${sums}`;
 }
 
 const GenerateInput = InputSchema.extend({
@@ -213,15 +213,16 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const sourceNorm = normalize(sourceText);
     const systemPrompt = genSystemPrompt(difficulty, analysis, spec);
 
-
+    const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxAttempts = Math.min(20, Math.ceil(count / BATCH) * 3 + 3);
+    const maxAttempts = Math.ceil(count / batch) + 8;
     let attempts = 0;
 
     while (validated.length < count && attempts < maxAttempts) {
       attempts++;
-      const need = Math.min(count - validated.length, BATCH);
+      const need = Math.min(count - validated.length, batch);
+
       const avoid = validated.slice(-25).map((q) => q.question);
       const userPrompt = `Generate ${need} quiz questions from this source. Return valid JSON only.${
         analysis?.topics?.length ? `\n\nAllocate the ${need} questions across the analysed topics as evenly as possible.` : ""
