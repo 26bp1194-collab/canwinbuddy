@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw } from "lucide-react";
+import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
@@ -25,6 +25,15 @@ import {
   type StepTiming,
   type StyleSpec,
 } from "@/lib/prefs";
+
+import {
+  SUBJECTS,
+  AGES,
+  ageLabel,
+  buildGuidance,
+  type AudienceEntry,
+  type SubjectEntry,
+} from "@/lib/quiz-context";
 
 import { AiTextHelper } from "@/components/ai-text-helper";
 import { Button } from "@/components/ui/button";
@@ -74,6 +83,10 @@ function GeneratePage() {
     setSpecs((s) => ({ ...s, [mode]: { ...next, mode } }));
   };
 
+  const [subjects, setSubjects] = useState<SubjectEntry[]>([{ value: "No subject", custom: "" }]);
+  const [audiences, setAudiences] = useState<AudienceEntry[]>([{ kind: "single", age: 12 }]);
+  const [instructions, setInstructions] = useState("");
+
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [timings, setTimings] = useState<StepTiming[]>([]);
@@ -94,6 +107,9 @@ function GeneratePage() {
     if (draft) {
       setSource(draft.source);
       setTitle(draft.title);
+      if (draft.subjects?.length) setSubjects(draft.subjects);
+      if (draft.audiences?.length) setAudiences(draft.audiences);
+      setInstructions(draft.instructions ?? "");
     }
     if (draft && useDraftSettings) {
       setCountText(draft.countText ?? String(draft.count));
@@ -140,12 +156,16 @@ function GeneratePage() {
       difficulty === d.difficulty &&
       JSON.stringify(specs.simple) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" }) &&
       JSON.stringify(specs.advanced) === JSON.stringify({ ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" });
-    if (!source.trim() && !title.trim() && settingsAreDefault) {
+    const contextIsDefault =
+      !instructions.trim() &&
+      subjects.length === 1 && subjects[0].value === "No subject" &&
+      audiences.length === 1 && audiences[0].kind === "single" && audiences[0].age === 12;
+    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault) {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs, defaultsSig: quizDefaultsSignature() });
-  }, [source, title, count, countText, difficulty, spec, mode, specs]);
+    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs, subjects, audiences, instructions, defaultsSig: quizDefaultsSignature() });
+  }, [source, title, count, countText, difficulty, spec, mode, specs, subjects, audiences, instructions]);
 
 
   const resetSettings = () => {
@@ -212,20 +232,21 @@ function GeneratePage() {
 
       setStage("analyzing");
       const t0a = performance.now();
-      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty } });
+      const guidance = buildGuidance(subjects, audiences, instructions);
+      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
       mark("Analyzing notes", t0a);
 
       setStage("generating");
       const t1 = performance.now();
       const generated = await generateQuestions({
-        data: { sourceText: combined, count, difficulty, spec, analysis },
+        data: { sourceText: combined, count, difficulty, spec, analysis, guidance },
       });
       mark("Generating quiz", t1);
 
       setStage("reviewing");
       const t2 = performance.now();
       const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis },
+        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis, guidance },
       });
       mark("Reviewing quiz", t2);
 
@@ -285,6 +306,9 @@ function GeneratePage() {
                 </Label>
                 <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Chapter 4: The French Revolution")} />
               </div>
+
+              <SubjectFields subjects={subjects} setSubjects={setSubjects} />
+              <AudienceFields audiences={audiences} setAudiences={setAudiences} />
 
               <div>
                 <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:justify-between">
@@ -351,6 +375,19 @@ function GeneratePage() {
                 )}
               </div>
 
+              <div>
+                <Label htmlFor="instructions" className="mb-2 block">
+                  {t("Instructions")} <span className="text-muted-foreground">({t("optional")})</span>
+                </Label>
+                <Textarea
+                  id="instructions"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder={t("e.g. Focus on dates and causes, avoid definitions, use real-world examples…")}
+                  className="min-h-[80px] resize-y"
+                />
+              </div>
+
               <DifficultyControls
                 difficulty={difficulty}
                 setDifficulty={setDifficulty}
@@ -382,6 +419,160 @@ function GeneratePage() {
         onApply={useHelperText}
         initialInstruction={helperSeed}
       />
+    </div>
+  );
+}
+
+function SubjectFields({
+  subjects,
+  setSubjects,
+}: {
+  subjects: SubjectEntry[];
+  setSubjects: (s: SubjectEntry[]) => void;
+}) {
+  const t = useT();
+  const update = (i: number, next: Partial<SubjectEntry>) =>
+    setSubjects(subjects.map((s, idx) => (idx === i ? { ...s, ...next } : s)));
+
+  return (
+    <div>
+      <Label className="mb-2 block">{t("Subject")}</Label>
+      <div className="space-y-2">
+        {subjects.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <Select value={s.value} onValueChange={(v) => update(i, { value: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUBJECTS.map((name) => (
+                    <SelectItem key={name} value={name}>{t(name)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {s.value === "Others" && (
+              <Input
+                value={s.custom}
+                onChange={(e) => update(i, { custom: e.target.value })}
+                placeholder={t("Custom subject")}
+                className="min-w-0 flex-1"
+              />
+            )}
+            {i === 0 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                aria-label={t("Add subject")}
+                onClick={() => setSubjects([...subjects, { value: "No subject", custom: "" }])}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("Remove subject")}
+                onClick={() => setSubjects(subjects.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AudienceFields({
+  audiences,
+  setAudiences,
+}: {
+  audiences: AudienceEntry[];
+  setAudiences: (a: AudienceEntry[]) => void;
+}) {
+  const t = useT();
+  const update = (i: number, next: AudienceEntry) =>
+    setAudiences(audiences.map((a, idx) => (idx === i ? next : a)));
+
+  const ageSelect = (value: number, onChange: (n: number) => void, label?: string) => (
+    <div className="min-w-0 flex-1">
+      {label && <span className="mb-1 block text-xs text-muted-foreground">{label}</span>}
+      <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {AGES.map((a) => (
+            <SelectItem key={a} value={String(a)}>{ageLabel(a)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  return (
+    <div>
+      <Label className="mb-2 block">{t("For")}</Label>
+      <div className="space-y-3">
+        {audiences.map((a, i) => (
+          <div key={i} className="space-y-2 rounded-xl border border-border bg-secondary/30 p-3">
+            <div className="flex items-center gap-2">
+              <div className="grid flex-1 grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => update(i, { kind: "single", age: a.kind === "single" ? a.age : a.least })}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    a.kind === "single" ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
+                  )}
+                >
+                  {t("Single")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => update(i, { kind: "range", least: a.kind === "single" ? a.age : a.least, highest: a.kind === "single" ? Math.min(18, a.age + 1) : a.highest })}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    a.kind === "range" ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
+                  )}
+                >
+                  {t("Multiple")}
+                </button>
+              </div>
+              {i === 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  aria-label={t("Add level")}
+                  onClick={() => setAudiences([...audiences, { kind: "single", age: 12 }])}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("Remove level")}
+                  onClick={() => setAudiences(audiences.filter((_, idx) => idx !== i))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {a.kind === "single" ? (
+              <div className="flex">{ageSelect(a.age, (n) => update(i, { kind: "single", age: n }))}</div>
+            ) : (
+              <div className="flex gap-2">
+                {ageSelect(a.least, (n) => update(i, { ...a, least: n }), t("Least"))}
+                {ageSelect(a.highest, (n) => update(i, { ...a, highest: n }), t("Highest"))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
