@@ -411,6 +411,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
           f.issues,
           others,
           spec,
+          guidance,
         );
         if (!replacement) continue;
         const dupe = others.some(
