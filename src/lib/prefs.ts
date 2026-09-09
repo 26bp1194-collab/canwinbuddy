@@ -172,6 +172,9 @@ export type GenerateDraft = {
   spec?: StyleSpec;
   mode?: "simple" | "advanced";
   specs?: { simple: StyleSpec; advanced: StyleSpec };
+  subjects?: import("./quiz-context").SubjectEntry[];
+  audiences?: import("./quiz-context").AudienceEntry[];
+  instructions?: string;
   /** Signature of the user's quiz defaults when the draft was saved. */
   defaultsSig?: string;
 };
