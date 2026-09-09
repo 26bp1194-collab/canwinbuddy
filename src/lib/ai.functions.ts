@@ -47,7 +47,13 @@ const SELF_CONTAINED = `SELF-CONTAINED CONTEXT (critical):
 - If a term only makes sense with a definition, include the short defining phrase in the stem.
 - Where an example helps, write a short example in the same style as the notes — a few short notes only, never long extra material.`;
 
+const guidanceBlock = (g?: string | null) =>
+  g && g.trim()
+    ? `\n\nUSER BRIEF (subject areas, target learner level/age, and extra instructions). Follow these when choosing wording, vocabulary and framing. Facts must still come ONLY from the source:\n${g.trim().slice(0, 2000)}`
+    : "";
+
 const InputSchema = z.object({
+  guidance: z.string().max(2000).optional(),
   sourceText: z.string().min(20),
   count: z.number().int().min(1).max(100),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
@@ -113,6 +119,7 @@ function batchSize(count: number) {
 /* ---------------- 1. Analyze ---------------- */
 
 const AnalyzeInput = z.object({
+  guidance: z.string().max(2000).optional(),
   sourceText: z.string().min(20),
   count: z.number().int().min(1).max(100).optional(),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
@@ -131,7 +138,7 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => AnalyzeInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, count, difficulty } = data;
+    const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
 - Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string}
 - Read the notes carefully from start to finish before answering.
@@ -140,7 +147,7 @@ export const analyzeSource = createServerFn({ method: "POST" })
 - "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
 - Use ONLY the provided notes. Never add outside knowledge.
-${MATH_RULES}`;
+${MATH_RULES}${guidanceBlock(guidance)}`;
     const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
     const raw = await callAI([
       { role: "system", content: system },
@@ -162,7 +169,7 @@ ${MATH_RULES}`;
 
 /* ---------------- 2. Generate ---------------- */
 
-function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null) {
+function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
   const topics = analysis?.topics?.length
     ? `\n\nANALYSED TOPICS (spread questions evenly across these):\n${analysis.topics.map((t) => `- ${t}`).join("\n")}`
     : "";
@@ -197,7 +204,7 @@ STYLE:
 - Do not repeat or lightly rephrase questions already accepted.
 
 ${SELF_CONTAINED}
-${MATH_RULES}${styleBlock(spec)}${topics}${facts}${sums}`;
+${MATH_RULES}${styleBlock(spec)}${guidanceBlock(guidance)}${topics}${facts}${sums}`;
 }
 
 const GenerateInput = InputSchema.extend({
@@ -208,10 +215,10 @@ export const generateQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => GenerateInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, count, difficulty, spec } = data;
+    const { sourceText, count, difficulty, spec, guidance } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
-    const systemPrompt = genSystemPrompt(difficulty, analysis, spec);
+    const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance);
 
     const batch = batchSize(count);
     const validated: Question[] = [];
@@ -275,7 +282,7 @@ const ReviewSchema = z.object({
   ),
 });
 
-const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null) => `You are a strict quiz quality reviewer.
+const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null, guidance?: string | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
 Check each question, in this order:
@@ -284,15 +291,15 @@ Check each question, in this order:
 3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
 5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
-Each issue is one short, actionable sentence.${styleBlock(spec)}`;
+Each issue is one short, actionable sentence.${styleBlock(spec)}${guidanceBlock(guidance)}`;
 
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null) {
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
   const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
     questions.map((q, index) => ({ index, ...q })),
   )}`;
   const raw = await callAI([
-    { role: "system", content: REVIEW_SYSTEM(difficulty, spec) },
+    { role: "system", content: REVIEW_SYSTEM(difficulty, spec, guidance) },
     { role: "user", content: user },
   ]);
   try {
@@ -313,7 +320,7 @@ async function regenerateOne(
   issues: string[],
   accepted: Question[],
   spec?: Partial<StyleSpec> | null,
-
+  guidance?: string | null,
 ): Promise<Question | null> {
   const user = `Write ONE replacement quiz question.
 
@@ -335,7 +342,7 @@ Return JSON with exactly one item: {"questions":[{...}]}
 SOURCE:
 """${sourceText}"""`;
   const raw = await callAI([
-    { role: "system", content: genSystemPrompt(difficulty, analysis, spec) },
+    { role: "system", content: genSystemPrompt(difficulty, analysis, spec, guidance) },
     { role: "user", content: user },
   ]);
   try {
@@ -348,6 +355,7 @@ SOURCE:
 }
 
 const ReviewInput = z.object({
+  guidance: z.string().max(2000).optional(),
   sourceText: z.string().min(20),
   questions: z.array(QuestionSchema).min(1),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
@@ -364,7 +372,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => ReviewInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, questions, difficulty, requested, spec } = data;
+    const { sourceText, questions, difficulty, requested, spec, guidance } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
 
@@ -378,7 +386,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
 
     for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
       rounds = round + 1;
-      const reviews = await reviewBatch(sourceText, current, difficulty, spec);
+      const reviews = await reviewBatch(sourceText, current, difficulty, spec, guidance);
       const verdict = new Map(reviews.map((r) => [r.index, r]));
 
       const failing: Array<{ index: number; issues: string[] }> = [];
@@ -403,6 +411,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
           f.issues,
           others,
           spec,
+          guidance,
         );
         if (!replacement) continue;
         const dupe = others.some(
