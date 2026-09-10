@@ -11,7 +11,6 @@ import {
   Sun,
   Moon,
   LogOut,
-  Menu,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
