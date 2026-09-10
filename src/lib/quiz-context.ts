@@ -28,7 +28,8 @@ export type SubjectEntry = { value: string; custom: string };
 
 export type AudienceEntry =
   | { kind: "single"; age: number }
-  | { kind: "range"; least: number; highest: number };
+  | { kind: "range"; least: number; highest: number }
+  | { kind: "all" };
 
 export const AGES = Array.from({ length: 13 }, (_, i) => i + 6); // 6..18
 
@@ -47,7 +48,9 @@ export function subjectText(s: SubjectEntry): string {
 
 export function audienceText(a: AudienceEntry): string {
   if (a.kind === "single") return ageLabel(a.age);
+  if (a.kind === "all") return "All ages (6-18)";
   const [lo, hi] = a.least <= a.highest ? [a.least, a.highest] : [a.highest, a.least];
+  if (lo === hi) return ageLabel(lo);
   return `Ages ${lo}-${hi} (${ageLabel(lo).split(" — ")[1] ?? ""} to ${ageLabel(hi).split(" — ")[1] ?? ""})`.replace(" ()", "");
 }
 

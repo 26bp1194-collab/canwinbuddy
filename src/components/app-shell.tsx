@@ -63,13 +63,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
 
         <div className="flex items-center gap-3 px-4 py-5">
-          <img
-            src={logo.url}
-            alt="CanWinBuddy logo"
-            className="h-9 w-9 shrink-0 rounded-2xl object-cover bg-primary/10"
-          />
-          {!collapsed && (
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setCollapsed(false)}
+                  aria-label="Expand sidebar"
+                  className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{t("Expand")}</TooltipContent>
+            </Tooltip>
+          ) : (
             <>
+              <img
+                src={logo.url}
+                alt="CanWinBuddy logo"
+                className="h-9 w-9 shrink-0 rounded-xl bg-primary/10 object-cover"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-sm font-semibold">CanWinBuddy</p>
                 <p className="truncate text-xs text-muted-foreground">@{username ?? "you"}</p>
@@ -121,20 +134,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="space-y-2 border-t border-sidebar-border p-3">
-          {collapsed && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setCollapsed(false)}
-                  aria-label="Expand sidebar"
-                  className="glow-ring flex h-9 w-full items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform hover:scale-105"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">{t("Expand")}</TooltipContent>
-            </Tooltip>
-          )}
           {(() => {
             const themeLabel = theme === "dark" ? t("Light mode") : t("Dark mode");
             const btn = (

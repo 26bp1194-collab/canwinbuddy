@@ -307,8 +307,10 @@ function GeneratePage() {
                 <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Chapter 4: The French Revolution")} />
               </div>
 
-              <SubjectFields subjects={subjects} setSubjects={setSubjects} />
-              <AudienceFields audiences={audiences} setAudiences={setAudiences} />
+              <div className="grid items-start gap-5 sm:grid-cols-2">
+                <SubjectFields subjects={subjects} setSubjects={setSubjects} />
+                <AudienceFields audiences={audiences} setAudiences={setAudiences} />
+              </div>
 
               <div>
                 <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:justify-between">
@@ -497,11 +499,10 @@ function AudienceFields({
   const update = (i: number, next: AudienceEntry) =>
     setAudiences(audiences.map((a, idx) => (idx === i ? next : a)));
 
-  const ageSelect = (value: number, onChange: (n: number) => void, label?: string) => (
+  const ageSelect = (value: number, onChange: (n: number) => void, ariaLabel: string) => (
     <div className="min-w-0 flex-1">
-      {label && <span className="mb-1 block text-xs text-muted-foreground">{label}</span>}
       <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectTrigger aria-label={ariaLabel}><SelectValue /></SelectTrigger>
         <SelectContent>
           {AGES.map((a) => (
             <SelectItem key={a} value={String(a)}>{ageLabel(a)}</SelectItem>
@@ -514,31 +515,30 @@ function AudienceFields({
   return (
     <div>
       <Label className="mb-2 block">{t("For")}</Label>
-      <div className="space-y-3">
+      <div className="space-y-2 rounded-xl border border-border bg-secondary/30 p-3">
         {audiences.map((a, i) => (
-          <div key={i} className="space-y-2 rounded-xl border border-border bg-secondary/30 p-3">
+          <div key={i} className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="grid flex-1 grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => update(i, { kind: "single", age: a.kind === "single" ? a.age : a.least })}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
-                    a.kind === "single" ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
-                  )}
+              <div className="min-w-0 flex-1">
+                <Select
+                  value={a.kind === "single" ? String(a.age) : a.kind}
+                  onValueChange={(value) => {
+                    if (value === "all") update(i, { kind: "all" });
+                    else if (value === "range") {
+                      const start = a.kind === "single" ? a.age : a.kind === "range" ? a.least : 12;
+                      update(i, { kind: "range", least: start, highest: Math.min(18, start + 1) });
+                    } else update(i, { kind: "single", age: Number(value) });
+                  }}
                 >
-                  {t("Single")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => update(i, { kind: "range", least: a.kind === "single" ? a.age : a.least, highest: a.kind === "single" ? Math.min(18, a.age + 1) : a.highest })}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
-                    a.kind === "range" ? "border-primary/60 bg-primary text-primary-foreground" : "border-border bg-secondary/50 hover:bg-accent/60",
-                  )}
-                >
-                  {t("Multiple")}
-                </button>
+                  <SelectTrigger aria-label={t("Age or level")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {AGES.map((age) => (
+                      <SelectItem key={age} value={String(age)}>{ageLabel(age)}</SelectItem>
+                    ))}
+                    <SelectItem value="range">{t("Range")}</SelectItem>
+                    <SelectItem value="all">{t("All")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {i === 0 ? (
                 <Button
@@ -562,14 +562,20 @@ function AudienceFields({
                 </Button>
               )}
             </div>
-            {a.kind === "single" ? (
-              <div className="flex">{ageSelect(a.age, (n) => update(i, { kind: "single", age: n }))}</div>
-            ) : (
-              <div className="flex gap-2">
-                {ageSelect(a.least, (n) => update(i, { ...a, least: n }), t("Least"))}
-                {ageSelect(a.highest, (n) => update(i, { ...a, highest: n }), t("Highest"))}
+            {a.kind === "range" && (
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                {ageSelect(a.least, (n) => {
+                  if (n === a.highest) update(i, { kind: "single", age: n });
+                  else update(i, { kind: "range", least: Math.min(n, a.highest), highest: Math.max(n, a.highest) });
+                }, t("Range start"))}
+                <span className="text-xs text-muted-foreground">{t("until")}</span>
+                {ageSelect(a.highest, (n) => {
+                  if (n === a.least) update(i, { kind: "single", age: n });
+                  else update(i, { kind: "range", least: Math.min(a.least, n), highest: Math.max(a.least, n) });
+                }, t("Range end"))}
               </div>
             )}
+            {i < audiences.length - 1 && <div className="border-b border-border pt-1" />}
           </div>
         ))}
       </div>
