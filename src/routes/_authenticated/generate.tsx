@@ -84,7 +84,7 @@ function GeneratePage() {
   };
 
   const [subjects, setSubjects] = useState<SubjectEntry[]>([{ value: "No subject", custom: "" }]);
-  const [audiences, setAudiences] = useState<AudienceEntry[]>([{ kind: "single", age: 12 }]);
+  const [audiences, setAudiences] = useState<AudienceEntry[]>([{ kind: "all" }]);
   const [instructions, setInstructions] = useState("");
 
   const [files, setFiles] = useState<File[]>([]);
@@ -148,7 +148,7 @@ function GeneratePage() {
     const contextIsDefault =
       !instructions.trim() &&
       subjects.length === 1 && subjects[0].value === "No subject" &&
-      audiences.length === 1 && audiences[0].kind === "single" && audiences[0].age === 12;
+      audiences.length === 1 && audiences[0].kind === "all";
     if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault) {
       clearDraft();
       return;
