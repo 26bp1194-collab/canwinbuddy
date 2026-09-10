@@ -101,9 +101,8 @@ function GeneratePage() {
   useEffect(() => {
     const draft = getDraft();
     const defaults = getQuizDefaults();
-    /* If the user changed their defaults in Settings, the draft's saved
-       customisation is stale — start from the new defaults instead. */
-    const useDraftSettings = !!draft && draft.defaultsSig === quizDefaultsSignature();
+    /* Customisation always starts from the user's current defaults;
+       only the content (source, title, subject/for, instructions) is restored. */
     if (draft) {
       setSource(draft.source);
       setTitle(draft.title);
@@ -111,23 +110,13 @@ function GeneratePage() {
       if (draft.audiences?.length) setAudiences(draft.audiences);
       setInstructions(draft.instructions ?? "");
     }
-    if (draft && useDraftSettings) {
-      setCountText(draft.countText ?? String(draft.count));
-      setDifficulty(draft.difficulty);
-      setMode(draft.mode ?? "simple");
-      setSpecs({
-        simple: { ...DEFAULT_SPEC, ...defaults.spec, ...(draft.specs?.simple ?? (draft.spec?.mode !== "advanced" ? draft.spec : undefined)), mode: "simple" },
-        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, ...(draft.specs?.advanced ?? (draft.spec?.mode === "advanced" ? draft.spec : undefined)), mode: "advanced" },
-      });
-    } else {
-      setCountText(String(defaults.count));
-      setDifficulty(defaults.difficulty);
-      setMode("simple");
-      setSpecs({
-        simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
-        advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
-      });
-    }
+    setCountText(String(defaults.count));
+    setDifficulty(defaults.difficulty);
+    setMode("simple");
+    setSpecs({
+      simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
+      advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
+    });
 
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);

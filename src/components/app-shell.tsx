@@ -69,9 +69,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   onClick={() => setCollapsed(false)}
                   aria-label="Expand sidebar"
-                  className="glow-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform hover:scale-105"
+                  className="glow-ring h-9 w-9 shrink-0 overflow-hidden rounded-xl transition-transform hover:scale-105"
                 >
-                  <Menu className="h-4 w-4" />
+                  <img src={logo.url} alt="" className="h-full w-full object-cover" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">{t("Expand")}</TooltipContent>
