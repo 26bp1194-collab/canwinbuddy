@@ -489,9 +489,9 @@ function AudienceFields({
     setAudiences(audiences.map((a, idx) => (idx === i ? next : a)));
 
   const ageSelect = (value: number, onChange: (n: number) => void, ariaLabel: string) => (
-    <div className="min-w-0 flex-1">
+    <div className="w-20 shrink-0">
       <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-        <SelectTrigger aria-label={ariaLabel}><SelectValue /></SelectTrigger>
+        <SelectTrigger aria-label={ariaLabel} className="px-2"><SelectValue /></SelectTrigger>
         <SelectContent>
           {AGES.map((a) => (
             <SelectItem key={a} value={String(a)}>{ageLabel(a)}</SelectItem>
@@ -504,67 +504,64 @@ function AudienceFields({
   return (
     <div>
       <Label className="mb-2 block">{t("For")}</Label>
-      <div className="space-y-2 rounded-xl border border-border bg-secondary/30 p-3">
+      <div className="space-y-2">
         {audiences.map((a, i) => (
-          <div key={i} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <Select
-                  value={a.kind === "single" ? String(a.age) : a.kind}
-                  onValueChange={(value) => {
-                    if (value === "all") update(i, { kind: "all" });
-                    else if (value === "range") {
-                      const start = a.kind === "single" ? a.age : a.kind === "range" ? a.least : 12;
-                      update(i, { kind: "range", least: start, highest: Math.min(18, start + 1) });
-                    } else update(i, { kind: "single", age: Number(value) });
-                  }}
-                >
-                  <SelectTrigger aria-label={t("Age or level")}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {AGES.map((age) => (
-                      <SelectItem key={age} value={String(age)}>{ageLabel(age)}</SelectItem>
-                    ))}
-                    <SelectItem value="range">{t("Range")}</SelectItem>
-                    <SelectItem value="all">{t("All")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {i === 0 ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon"
-                  aria-label={t("Add level")}
-                  onClick={() => setAudiences([...audiences, { kind: "single", age: 12 }])}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("Remove level")}
-                  onClick={() => setAudiences(audiences.filter((_, idx) => idx !== i))}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
+          <div key={i} className="flex items-center gap-2">
+            <div className={a.kind === "range" ? "w-24 shrink-0" : "min-w-0 flex-1"}>
+              <Select
+                value={a.kind === "single" ? String(a.age) : a.kind}
+                onValueChange={(value) => {
+                  if (value === "all") update(i, { kind: "all" });
+                  else if (value === "range") {
+                    const start = a.kind === "single" ? a.age : a.kind === "range" ? a.least : 12;
+                    update(i, { kind: "range", least: start, highest: Math.min(18, start + 1) });
+                  } else update(i, { kind: "single", age: Number(value) });
+                }}
+              >
+                <SelectTrigger aria-label={t("Age or level")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AGES.map((age) => (
+                    <SelectItem key={age} value={String(age)}>{ageLabel(age)}</SelectItem>
+                  ))}
+                  <SelectItem value="range">{t("Between")}</SelectItem>
+                  <SelectItem value="all">{t("All")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {a.kind === "range" && (
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+              <>
                 {ageSelect(a.least, (n) => {
                   if (n === a.highest) update(i, { kind: "single", age: n });
                   else update(i, { kind: "range", least: Math.min(n, a.highest), highest: Math.max(n, a.highest) });
                 }, t("Range start"))}
-                <span className="text-xs text-muted-foreground">{t("until")}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{t("until")}</span>
                 {ageSelect(a.highest, (n) => {
                   if (n === a.least) update(i, { kind: "single", age: n });
                   else update(i, { kind: "range", least: Math.min(a.least, n), highest: Math.max(a.least, n) });
                 }, t("Range end"))}
-              </div>
+              </>
             )}
-            {i < audiences.length - 1 && <div className="border-b border-border pt-1" />}
+            {i === 0 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                aria-label={t("Add level")}
+                onClick={() => setAudiences([...audiences, { kind: "all" }])}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("Remove level")}
+                onClick={() => setAudiences(audiences.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         ))}
       </div>
