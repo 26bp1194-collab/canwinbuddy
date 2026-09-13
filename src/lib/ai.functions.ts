@@ -815,3 +815,43 @@ export const translateUi = createServerFn({ method: "POST" })
       return { translations: strings };
     }
   });
+
+/* ---------------- Short explanations for wrong answers ---------------- */
+
+const WrongInput = z.object({
+  sourceText: z.string().max(20000).optional().default(""),
+  items: z
+    .array(
+      z.object({
+        question: z.string().max(1000),
+        correct: z.string().max(500),
+        chosen: z.string().max(500),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+export const explainWrongAnswers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => WrongInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { items, sourceText } = data;
+    const system = `You write one very short explanation for each quiz question a learner got wrong.
+- Return ONLY valid JSON: {"explanations":[string]} with EXACTLY ${items.length} items, in the same order.
+- Each explanation says why the correct answer is right (and, if it fits, why the chosen one is wrong).
+- LENGTH: 5-20 words for a simple, everyday topic. Only for a genuinely advanced or technical topic may you use up to 45 words. Never longer.
+- Plain sentence, no bullets, no markdown, no preamble.
+${MATH_RULES}`;
+    const user = `${sourceText ? `SOURCE (excerpt):\n"""${sourceText.slice(0, 6000)}"""\n\n` : ""}WRONG ANSWERS:\n${JSON.stringify(items)}`;
+    const raw = await callAI([
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ]);
+    try {
+      const parsed = z.object({ explanations: z.array(z.string()) }).parse(JSON.parse(raw));
+      return { explanations: items.map((_, i) => parsed.explanations[i] ?? "") };
+    } catch {
+      return { explanations: items.map(() => "") };
+    }
+  });
