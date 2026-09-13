@@ -161,6 +161,7 @@ const AnalysisSchema = z.object({
   keyFacts: z.array(z.string()),
   summaries: z.array(z.string()).default([]),
   coverageNotes: z.string(),
+  maxQuestions: z.number().int().min(0).max(300).default(0),
 });
 
 export type Analysis = z.infer<typeof AnalysisSchema>;
@@ -171,12 +172,13 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
-- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string}
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
 - "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
 - "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
+- "maxQuestions": how many GENUINELY DIFFERENT multiple-choice questions these notes can support. Count one question per distinct testable fact only. Two questions that test the same fact with different wording count as ONE. Be honest and conservative — a short set of notes usually supports far fewer than 20.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
     const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
@@ -191,9 +193,10 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
         keyFacts: parsed.keyFacts.slice(0, 20),
         summaries: (parsed.summaries ?? []).slice(0, 12),
         coverageNotes: parsed.coverageNotes,
+        maxQuestions: parsed.maxQuestions ?? 0,
       } satisfies Analysis;
     } catch {
-      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "" } as Analysis;
+      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "", maxQuestions: 0 } as Analysis;
     }
   });
 
