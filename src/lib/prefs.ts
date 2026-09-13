@@ -287,6 +287,66 @@ export function useQuickDelete() {
   return state;
 }
 
+/* ---------------- Lack-of-information warning ---------------- */
+
+const SKIP_INFO_KEY = "cwb:skip-info-warning";
+
+export type InfoWarningAction = "back" | "continue";
+export type SkipInfoWarning = { enabled: boolean; action: InfoWarningAction };
+
+export const DEFAULT_SKIP_INFO: SkipInfoWarning = { enabled: false, action: "continue" };
+
+export function getSkipInfoWarning(): SkipInfoWarning {
+  if (typeof window === "undefined") return DEFAULT_SKIP_INFO;
+  try {
+    const raw = window.localStorage.getItem(SKIP_INFO_KEY);
+    if (!raw) return DEFAULT_SKIP_INFO;
+    return { ...DEFAULT_SKIP_INFO, ...(JSON.parse(raw) as Partial<SkipInfoWarning>) };
+  } catch {
+    return DEFAULT_SKIP_INFO;
+  }
+}
+
+export function setSkipInfoWarningValue(value: SkipInfoWarning) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SKIP_INFO_KEY, JSON.stringify(value));
+}
+
+/* ---------------- Settings snapshot saved with each quiz ---------------- */
+
+export type QuizSettingsSnapshot = {
+  count: number;
+  difficulty: Difficulty;
+  mode: "simple" | "advanced";
+  spec: StyleSpec;
+  subjects?: import("./quiz-context").SubjectEntry[];
+  audiences?: import("./quiz-context").AudienceEntry[];
+  instructions?: string;
+};
+
+const PREFILL_KEY = "cwb:generate-prefill";
+
+export type GeneratePrefill = QuizSettingsSnapshot & { source: string; title: string };
+
+export function setGeneratePrefill(value: GeneratePrefill) {
+  try {
+    draftStore()?.setItem(PREFILL_KEY, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function takeGeneratePrefill(): GeneratePrefill | null {
+  try {
+    const raw = draftStore()?.getItem(PREFILL_KEY);
+    if (!raw) return null;
+    draftStore()?.removeItem(PREFILL_KEY);
+    return JSON.parse(raw) as GeneratePrefill;
+  } catch {
+    return null;
+  }
+}
+
 /* ---------------- Direct setters (used by the Settings save bar) ---------------- */
 
 export function setPlanningEnabledValue(value: boolean) {
