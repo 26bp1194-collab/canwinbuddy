@@ -57,6 +57,7 @@ type Form = {
   planning: boolean;
   quickQuizDelete: boolean;
   quickGroupDelete: boolean;
+  skipInfo: SkipInfoWarning;
   defaults: QuizDefaults;
 };
 
@@ -82,6 +83,7 @@ function SettingsPage() {
       planning: getPlanningEnabled(),
       quickQuizDelete: getQuickQuizDelete(),
       quickGroupDelete: getQuickGroupDelete(),
+      skipInfo: getSkipInfoWarning(),
       defaults: getQuizDefaults(),
     };
     setSaved(current);
