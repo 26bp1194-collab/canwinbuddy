@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { translateQuestions, explainAnswer, editQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { formatMs, getQuizDefaults, getTimings, setGeneratePrefill, type QuizSettingsSnapshot, type StepTiming } from "@/lib/prefs";
-import { ageLabel } from "@/lib/quiz-context";
+import { subjectText, audienceText } from "@/lib/quiz-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { QuizGame } from "@/components/quiz-game";
@@ -435,10 +435,10 @@ function SourcesDialog({
             ] as Array<[string, string]>)
           : ([[t("Short questions & answers"), settings.spec?.shortQA ? t("Yes") : t("No")]] as Array<[string, string]>)),
         ...(settings.subjects?.length
-          ? ([[t("Subject"), settings.subjects.map((s) => s.label ?? String(s)).join(", ")]] as Array<[string, string]>)
+          ? ([[t("Subject"), settings.subjects.map(subjectText).join(", ")]] as Array<[string, string]>)
           : []),
         ...(settings.audiences?.length
-          ? ([[t("For"), settings.audiences.map((a) => ageLabel(a)).join(", ")]] as Array<[string, string]>)
+          ? ([[t("For"), settings.audiences.map(audienceText).join(", ")]] as Array<[string, string]>)
           : []),
         ...(settings.instructions?.trim()
           ? ([[t("Instructions"), settings.instructions.trim()]] as Array<[string, string]>)
