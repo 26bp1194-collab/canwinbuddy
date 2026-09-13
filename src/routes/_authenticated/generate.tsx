@@ -100,14 +100,19 @@ function GeneratePage() {
   const [helperSeed, setHelperSeed] = useState("");
   const restored = useRef(false);
   const finished = useRef(false);
+  /* Paused generation state when the source can't support the requested amount */
+  const pending = useRef<{ combined: string; analysis: Analysis; started: number; steps: StepTiming[] } | null>(null);
+  const [capacity, setCapacity] = useState(0);
+  const [capacityChoice, setCapacityChoice] = useState("1");
 
   /* Restore any in-progress draft + a suggested follow-up quiz */
   useEffect(() => {
     const draft = getDraft();
     const defaults = getQuizDefaults();
+    const prefill = takeGeneratePrefill();
     /* Customisation always starts from the user's current defaults;
        only the content (source, title, subject/for, instructions) is restored. */
-    if (draft) {
+    if (draft && !prefill) {
       setSource(draft.source);
       setTitle(draft.title);
       if (draft.subjects?.length) setSubjects(draft.subjects);
@@ -121,6 +126,24 @@ function GeneratePage() {
       simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
       advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
     });
+
+    /* "Use all" from an existing quiz — reuse its sources and every setting */
+    if (prefill) {
+      setSource(prefill.source);
+      setTitle(prefill.title);
+      setInstructions(prefill.instructions ?? "");
+      if (prefill.subjects?.length) setSubjects(prefill.subjects);
+      if (prefill.audiences?.length) setAudiences(prefill.audiences);
+      setCountText(String(prefill.count));
+      setDifficulty(prefill.difficulty);
+      setMode(prefill.mode ?? "simple");
+      if (prefill.spec) {
+        setSpecs((s) => ({ ...s, [prefill.mode ?? "simple"]: { ...prefill.spec, mode: prefill.mode ?? "simple" } }));
+      }
+      toast.success(t("Sources and settings loaded from your quiz"));
+    }
+
+
 
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
