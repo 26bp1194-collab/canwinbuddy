@@ -18,9 +18,14 @@ import {
   getQuickGroupDelete,
   setQuickQuizDeleteValue,
   setQuickGroupDeleteValue,
+  getSkipInfoWarning,
+  setSkipInfoWarningValue,
   DEFAULT_QUIZ_DEFAULTS,
+  DEFAULT_SKIP_INFO,
   type QuizDefaults,
+  type SkipInfoWarning,
   type StyleSpec,
+
 
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
