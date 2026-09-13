@@ -396,6 +396,7 @@ function GeneratePage() {
                   id="src"
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
+                  onKeyDown={(e) => listKeyDown(e, setSource)}
                   placeholder={t("Paste your notes, article, or study material here…")}
                   className="min-h-[180px] resize-y sm:min-h-[220px]"
                 />
