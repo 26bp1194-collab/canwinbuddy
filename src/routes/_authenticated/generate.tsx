@@ -15,6 +15,8 @@ import {
   formatMs,
   getDraft,
   getQuizDefaults,
+  getSkipInfoWarning,
+  takeGeneratePrefill,
   quizDefaultsSignature,
   saveDraft,
   saveTimings,
@@ -25,6 +27,8 @@ import {
   type StepTiming,
   type StyleSpec,
 } from "@/lib/prefs";
+import { listKeyDown } from "@/lib/list-input";
+import type { Analysis } from "@/lib/ai.functions";
 
 import {
   SUBJECTS,
@@ -56,7 +60,7 @@ export const Route = createFileRoute("/_authenticated/generate")({
   component: GeneratePage,
 });
 
-type Stage = "input" | "extracting" | "analyzing" | "generating" | "reviewing" | "saving" | "done";
+type Stage = "input" | "extracting" | "analyzing" | "insufficient" | "generating" | "reviewing" | "saving" | "done";
 const SUGGESTION_KEY = "cwb:next-quiz";
 
 function GeneratePage() {
@@ -96,14 +100,19 @@ function GeneratePage() {
   const [helperSeed, setHelperSeed] = useState("");
   const restored = useRef(false);
   const finished = useRef(false);
+  /* Paused generation state when the source can't support the requested amount */
+  const pending = useRef<{ combined: string; analysis: Analysis; started: number; steps: StepTiming[] } | null>(null);
+  const [capacity, setCapacity] = useState(0);
+  const [capacityChoice, setCapacityChoice] = useState("1");
 
   /* Restore any in-progress draft + a suggested follow-up quiz */
   useEffect(() => {
     const draft = getDraft();
     const defaults = getQuizDefaults();
+    const prefill = takeGeneratePrefill();
     /* Customisation always starts from the user's current defaults;
        only the content (source, title, subject/for, instructions) is restored. */
-    if (draft) {
+    if (draft && !prefill) {
       setSource(draft.source);
       setTitle(draft.title);
       if (draft.subjects?.length) setSubjects(draft.subjects);
@@ -117,6 +126,24 @@ function GeneratePage() {
       simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
       advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
     });
+
+    /* "Use all" from an existing quiz — reuse its sources and every setting */
+    if (prefill) {
+      setSource(prefill.source);
+      setTitle(prefill.title);
+      setInstructions(prefill.instructions ?? "");
+      if (prefill.subjects?.length) setSubjects(prefill.subjects);
+      if (prefill.audiences?.length) setAudiences(prefill.audiences);
+      setCountText(String(prefill.count));
+      setDifficulty(prefill.difficulty);
+      setMode(prefill.mode ?? "simple");
+      if (prefill.spec) {
+        setSpecs((s) => ({ ...s, [prefill.mode ?? "simple"]: { ...prefill.spec, mode: prefill.mode ?? "simple" } }));
+      }
+      toast.success(t("Sources and settings loaded from your quiz"));
+    }
+
+
 
 
     const raw = window.localStorage.getItem(SUGGESTION_KEY);
@@ -184,6 +211,71 @@ function GeneratePage() {
 
   const removeFile = (i: number) => setFiles((f) => f.filter((_, idx) => idx !== i));
 
+  const makeMark = (started: number, steps: StepTiming[]) => (label: string, from: number) => {
+    steps.push({ label, ms: performance.now() - from });
+    setTimings([...steps]);
+    setTotalMs(performance.now() - started);
+  };
+
+  /* Steps 3-6: generate → review → save, for a decided amount of questions */
+  const finishRun = async (combined: string, analysis: Analysis, useCount: number, started: number, steps: StepTiming[]) => {
+    const mark = makeMark(started, steps);
+    const guidance = buildGuidance(subjects, audiences, instructions);
+    try {
+      setStage("generating");
+      const t1 = performance.now();
+      const generated = await generateQuestions({
+        data: { sourceText: combined, count: useCount, difficulty, spec, analysis, guidance },
+      });
+      mark("Generating quiz", t1);
+
+      setStage("reviewing");
+      const t2 = performance.now();
+      const { questions } = await reviewAndRepair({
+        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance },
+      });
+      mark("Reviewing quiz", t2);
+
+      setStage("saving");
+      const t3 = performance.now();
+      const finalTitle = title.trim() || combined.slice(0, 60).replace(/\s+/g, " ") + (combined.length > 60 ? "…" : "");
+      const { data: inserted, error } = await supabase
+        .from("quiz_sets")
+        .insert({
+          user_id: user!.id,
+          title: finalTitle,
+          source_text: combined,
+          questions: JSON.parse(JSON.stringify(questions)),
+          question_count: questions.length,
+          settings: JSON.parse(
+            JSON.stringify({ count: useCount, difficulty, mode, spec, subjects, audiences, instructions }),
+          ),
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      mark("Saving set", t3);
+
+      const total = performance.now() - started;
+      setTotalMs(total);
+      saveTimings(inserted.id, steps, total);
+      setStage("done");
+      finished.current = true;
+      pending.current = null;
+      clearDraft();
+
+      if (questions.length < useCount) {
+        toast.success(`${t("Generated")} ${questions.length}/${useCount} — ${formatMs(total)}`);
+      } else {
+        toast.success(`${t("Generated")} ${questions.length} — ${formatMs(total)}`);
+      }
+      navigate({ to: "/export/$id", params: { id: inserted.id } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Generation failed"));
+      setStage("input");
+    }
+  };
+
   const run = async () => {
     if (!source.trim() && files.length === 0) {
       toast.error(t("Add source text or upload a file first."));
@@ -191,15 +283,11 @@ function GeneratePage() {
     }
     const started = performance.now();
     const steps: StepTiming[] = [];
-    const mark = (label: string, from: number) => {
-      const entry = { label, ms: performance.now() - from };
-      steps.push(entry);
-      setTimings([...steps]);
-      setTotalMs(performance.now() - started);
-    };
+    const mark = makeMark(started, steps);
 
+    let combined = source.trim();
+    let analysis: Analysis;
     try {
-      let combined = source.trim();
       setTimings([]);
       setTotalMs(0);
 
@@ -222,58 +310,48 @@ function GeneratePage() {
       setStage("analyzing");
       const t0a = performance.now();
       const guidance = buildGuidance(subjects, audiences, instructions);
-      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
+      analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
       mark("Analyzing notes", t0a);
-
-      setStage("generating");
-      const t1 = performance.now();
-      const generated = await generateQuestions({
-        data: { sourceText: combined, count, difficulty, spec, analysis, guidance },
-      });
-      mark("Generating quiz", t1);
-
-      setStage("reviewing");
-      const t2 = performance.now();
-      const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis, guidance },
-      });
-      mark("Reviewing quiz", t2);
-
-
-      setStage("saving");
-      const t3 = performance.now();
-      const finalTitle = title.trim() || combined.slice(0, 60).replace(/\s+/g, " ") + (combined.length > 60 ? "…" : "");
-      const { data: inserted, error } = await supabase
-        .from("quiz_sets")
-        .insert({
-          user_id: user!.id,
-          title: finalTitle,
-          source_text: combined,
-          questions: JSON.parse(JSON.stringify(questions)),
-          question_count: questions.length,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      mark("Saving set", t3);
-
-      const total = performance.now() - started;
-      setTotalMs(total);
-      saveTimings(inserted.id, steps, total);
-      setStage("done");
-      finished.current = true;
-      clearDraft();
-
-      if (questions.length < count) {
-        toast.success(`${t("Generated")} ${questions.length}/${count} — ${formatMs(total)}`);
-      } else {
-        toast.success(`${t("Generated")} ${questions.length} — ${formatMs(total)}`);
-      }
-      navigate({ to: "/export/$id", params: { id: inserted.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Generation failed"));
       setStage("input");
+      return;
     }
+
+    /* Not enough material for the requested amount — pause and ask the user */
+    const supported = analysis.maxQuestions ?? 0;
+    if (supported > 0 && supported < count) {
+      const skip = getSkipInfoWarning();
+      if (skip.enabled && skip.action === "back") {
+        setStage("input");
+        toast.error(`${t("Your source only supports about")} ${supported} ${t("questions — add more information.")}`);
+        return;
+      }
+      if (skip.enabled) {
+        await finishRun(combined, analysis, supported, started, steps);
+        return;
+      }
+      pending.current = { combined, analysis, started, steps };
+      setCapacity(supported);
+      setCapacityChoice(String(supported));
+      setStage("insufficient");
+      return;
+    }
+
+    await finishRun(combined, analysis, count, started, steps);
+  };
+
+  const continueWithFewer = async () => {
+    const p = pending.current;
+    if (!p) return;
+    const chosen = Math.max(1, Math.min(capacity, Number(capacityChoice) || 1));
+    setCountText(String(chosen));
+    await finishRun(p.combined, p.analysis, chosen, p.started, p.steps);
+  };
+
+  const backToSources = () => {
+    pending.current = null;
+    setStage("input");
   };
 
   return (
@@ -318,6 +396,7 @@ function GeneratePage() {
                   id="src"
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
+                  onKeyDown={(e) => listKeyDown(e, setSource)}
                   placeholder={t("Paste your notes, article, or study material here…")}
                   className="min-h-[180px] resize-y sm:min-h-[220px]"
                 />
@@ -374,6 +453,7 @@ function GeneratePage() {
                   id="instructions"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
+                  onKeyDown={(e) => listKeyDown(e, setInstructions)}
                   placeholder={t("e.g. Focus on dates and causes, avoid definitions, use real-world examples…")}
                   className="min-h-[80px] resize-y"
                 />
@@ -399,6 +479,40 @@ function GeneratePage() {
         ) : (
           <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 space-y-5 sm:mt-8">
             <StageProgress stage={stage} timings={timings} totalMs={totalMs} />
+            {stage === "insufficient" && (
+              <div className="panel space-y-4 border-destructive/40 p-5 sm:p-6">
+                <div>
+                  <h2 className="text-lg font-semibold">{t("Not enough information")}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("Your source can support about")} <span className="font-semibold text-foreground">{capacity}</span>{" "}
+                    {t("good questions, but you asked for")} <span className="font-semibold text-foreground">{count}</span>.{" "}
+                    {t("Add more information, or make a shorter quiz.")}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Button variant="secondary" onClick={backToSources}>
+                    {t("Add more sources")}
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      aria-label={t("Amount of questions")}
+                      value={capacityChoice}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9]/g, "");
+                        setCapacityChoice(v === "" ? "" : String(Math.min(capacity, Number(v))));
+                      }}
+                      onBlur={() => { if (!capacityChoice.trim()) setCapacityChoice("1"); }}
+                      className="w-20 shrink-0"
+                    />
+                    <Button onClick={continueWithFewer} className="min-w-0 flex-1">
+                      <span className="truncate">{t("Continue with less questions")}</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -744,7 +858,7 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
     { id: "saving", label: "Saving set" },
     { id: "done", label: "Complete" },
   ];
-  const order: Stage[] = ["input", "extracting", "analyzing", "generating", "reviewing", "saving", "done"];
+  const order: Stage[] = ["input", "extracting", "analyzing", "insufficient", "generating", "reviewing", "saving", "done"];
 
   const idx = order.indexOf(stage);
 

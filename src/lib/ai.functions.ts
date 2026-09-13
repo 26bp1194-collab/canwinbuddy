@@ -107,6 +107,37 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
   return false;
 }
 
+/* ---- near-duplicate detection (stops "the same question asked four ways") ---- */
+
+const STOP = new Set(
+  "a an the of in on at to for from by with and or is are was were which what who whom whose how why when does do did that this these those it its as into all body human".split(
+    " ",
+  ),
+);
+
+function contentWords(s: string) {
+  return new Set(
+    normalize(s)
+      .split(" ")
+      .filter((w) => w.length > 2 && !STOP.has(w)),
+  );
+}
+
+function jaccard(a: Set<string>, b: Set<string>) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  a.forEach((w) => { if (b.has(w)) inter++; });
+  return inter / (a.size + b.size - inter);
+}
+
+/** True when two questions essentially test the same fact. */
+export function tooSimilar(a: Question, b: Question) {
+  const sameAnswer = normalize(a.choices[a.correctIndex]) === normalize(b.choices[b.correctIndex]);
+  const sim = jaccard(contentWords(a.question), contentWords(b.question));
+  if (sameAnswer && sim >= 0.3) return true;
+  return sim >= 0.6;
+}
+
 /* Batch size scales with the requested amount:
    1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
 function batchSize(count: number) {
@@ -130,6 +161,7 @@ const AnalysisSchema = z.object({
   keyFacts: z.array(z.string()),
   summaries: z.array(z.string()).default([]),
   coverageNotes: z.string(),
+  maxQuestions: z.number().int().min(0).max(300).default(0),
 });
 
 export type Analysis = z.infer<typeof AnalysisSchema>;
@@ -140,12 +172,13 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
-- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string}
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
 - "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
 - "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
+- "maxQuestions": how many GENUINELY DIFFERENT multiple-choice questions these notes can support. Count one question per distinct testable fact only. Two questions that test the same fact with different wording count as ONE. Be honest and conservative — a short set of notes usually supports far fewer than 20.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
     const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
@@ -160,9 +193,10 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
         keyFacts: parsed.keyFacts.slice(0, 20),
         summaries: (parsed.summaries ?? []).slice(0, 12),
         coverageNotes: parsed.coverageNotes,
+        maxQuestions: parsed.maxQuestions ?? 0,
       } satisfies Analysis;
     } catch {
-      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "" } as Analysis;
+      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "", maxQuestions: 0 } as Analysis;
     }
   });
 
@@ -201,6 +235,7 @@ COVERAGE:
 
 STYLE:
 - Vary correctIndex across 0,1,2,3 — do not bias toward 0 or 1.
+- NO NEAR-DUPLICATES: never test the same fact twice. Two questions with the same correct answer, or that reword the same sentence of the notes, are forbidden — even if the wording, the options or the order differ. Each question must target a different fact, relationship or detail.
 - Do not repeat or lightly rephrase questions already accepted.
 
 ${SELF_CONTAINED}
@@ -254,6 +289,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
         const dedupKey = q.question.toLowerCase().trim();
         if (seen.has(dedupKey)) continue;
         if (!validateQuestion(q, sourceNorm)) continue;
+        if (validated.some((a) => tooSimilar(a, q))) continue;
         seen.add(dedupKey);
         validated.push(q);
         addedThisRound++;
@@ -290,7 +326,7 @@ Check each question, in this order:
 2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
 3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
-5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
+5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
 Each issue is one short, actionable sentence.${styleBlock(spec)}${guidanceBlock(guidance)}`;
 
 
@@ -415,7 +451,9 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
         );
         if (!replacement) continue;
         const dupe = others.some(
-          (a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim(),
+          (a) =>
+            a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim() ||
+            tooSimilar(a, replacement),
         );
         /* Only swap in a replacement that is grounded in the notes and not a duplicate */
         if (dupe || !validateQuestion(replacement, sourceNorm)) continue;
@@ -775,5 +813,45 @@ export const translateUi = createServerFn({ method: "POST" })
       return { translations: parsed.translations };
     } catch {
       return { translations: strings };
+    }
+  });
+
+/* ---------------- Short explanations for wrong answers ---------------- */
+
+const WrongInput = z.object({
+  sourceText: z.string().max(20000).optional().default(""),
+  items: z
+    .array(
+      z.object({
+        question: z.string().max(1000),
+        correct: z.string().max(500),
+        chosen: z.string().max(500),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+export const explainWrongAnswers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => WrongInput.parse(raw))
+  .handler(async ({ data }) => {
+    const { items, sourceText } = data;
+    const system = `You write one very short explanation for each quiz question a learner got wrong.
+- Return ONLY valid JSON: {"explanations":[string]} with EXACTLY ${items.length} items, in the same order.
+- Each explanation says why the correct answer is right (and, if it fits, why the chosen one is wrong).
+- LENGTH: 5-20 words for a simple, everyday topic. Only for a genuinely advanced or technical topic may you use up to 45 words. Never longer.
+- Plain sentence, no bullets, no markdown, no preamble.
+${MATH_RULES}`;
+    const user = `${sourceText ? `SOURCE (excerpt):\n"""${sourceText.slice(0, 6000)}"""\n\n` : ""}WRONG ANSWERS:\n${JSON.stringify(items)}`;
+    const raw = await callAI([
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ]);
+    try {
+      const parsed = z.object({ explanations: z.array(z.string()) }).parse(JSON.parse(raw));
+      return { explanations: items.map((_, i) => parsed.explanations[i] ?? "") };
+    } catch {
+      return { explanations: items.map(() => "") };
     }
   });

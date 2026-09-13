@@ -18,9 +18,14 @@ import {
   getQuickGroupDelete,
   setQuickQuizDeleteValue,
   setQuickGroupDeleteValue,
+  getSkipInfoWarning,
+  setSkipInfoWarningValue,
   DEFAULT_QUIZ_DEFAULTS,
+  DEFAULT_SKIP_INFO,
   type QuizDefaults,
+  type SkipInfoWarning,
   type StyleSpec,
+
 
 } from "@/lib/prefs";
 import { APP_LANGUAGES, useI18n, useT } from "@/lib/i18n";
@@ -52,6 +57,7 @@ type Form = {
   planning: boolean;
   quickQuizDelete: boolean;
   quickGroupDelete: boolean;
+  skipInfo: SkipInfoWarning;
   defaults: QuizDefaults;
 };
 
@@ -77,6 +83,7 @@ function SettingsPage() {
       planning: getPlanningEnabled(),
       quickQuizDelete: getQuickQuizDelete(),
       quickGroupDelete: getQuickGroupDelete(),
+      skipInfo: getSkipInfoWarning(),
       defaults: getQuizDefaults(),
     };
     setSaved(current);
@@ -132,6 +139,7 @@ function SettingsPage() {
     setPlanningEnabledValue(form.planning);
     setQuickQuizDeleteValue(form.quickQuizDelete);
     setQuickGroupDeleteValue(form.quickGroupDelete);
+    setSkipInfoWarningValue(form.skipInfo);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
     clearSettingsDraft();
@@ -149,6 +157,7 @@ function SettingsPage() {
       planning: true,
       quickQuizDelete: false,
       quickGroupDelete: false,
+      skipInfo: DEFAULT_SKIP_INFO,
       defaults: DEFAULT_QUIZ_DEFAULTS,
     });
     setTheme("dark");
@@ -328,6 +337,45 @@ function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <section className="panel p-4 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <ListChecks className="h-4 w-4 shrink-0 text-primary" /> {t("Skip lack of information warning")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("When your source can't support the number of questions you asked for, don't stop to ask — just do the same thing every time.")}
+          </p>
+          <div className="mt-4 space-y-3 rounded-xl border border-border bg-secondary/40 p-4">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+              <Label htmlFor="skip-info" className="min-w-0 cursor-pointer text-sm font-medium">
+                {t("Skip the warning")}
+              </Label>
+              <Switch
+                id="skip-info"
+                checked={form.skipInfo.enabled}
+                onCheckedChange={(v) => patch({ skipInfo: { ...form.skipInfo, enabled: v } })}
+                className="shrink-0"
+              />
+            </div>
+            {form.skipInfo.enabled && (
+              <div className="space-y-2 border-t border-border pt-3">
+                <Label className="block text-sm">{t("What should happen instead?")}</Label>
+                <Select
+                  value={form.skipInfo.action}
+                  onValueChange={(v) => patch({ skipInfo: { ...form.skipInfo, action: v as SkipInfoWarning["action"] } })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="back">{t("Go back so I can add more sources")}</SelectItem>
+                    <SelectItem value="continue">{t("Continue with fewer questions")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </section>
+
+
 
 
 

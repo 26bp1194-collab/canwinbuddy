@@ -9,7 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { translateQuestions, explainAnswer, editQuestions, type Question } from "@/lib/ai.functions";
 import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
-import { formatMs, getQuizDefaults, getTimings, type StepTiming } from "@/lib/prefs";
+import { formatMs, getQuizDefaults, getTimings, setGeneratePrefill, type QuizSettingsSnapshot, type StepTiming } from "@/lib/prefs";
+import { subjectText, audienceText } from "@/lib/quiz-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { QuizGame } from "@/components/quiz-game";
@@ -365,7 +366,13 @@ function ExportPage() {
         onApply={makeProgressive}
       />
 
-      <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} sourceText={(data.source_text as string) ?? ""} />
+      <SourcesDialog
+        open={sourcesOpen}
+        onOpenChange={setSourcesOpen}
+        sourceText={(data.source_text as string) ?? ""}
+        settings={(data.settings as unknown as QuizSettingsSnapshot | null) ?? null}
+        title={(data.title as string) ?? ""}
+      />
 
 
       <ExplainDialog
@@ -393,22 +400,65 @@ function SourcesDialog({
   open,
   onOpenChange,
   sourceText,
+  settings,
+  title,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   sourceText: string;
+  settings?: QuizSettingsSnapshot | null;
+  title?: string;
 }) {
   const t = useT();
+  const navigate = useNavigate();
   /* Uploaded files were merged in as "[filename]" blocks when the set was generated */
   const files = Array.from(sourceText.matchAll(/^\[([^\]\n]+)\]$/gm)).map((m) => m[1]);
+
+  /* "Quiz name" → "Quiz name 2" → "Quiz name 3" … */
+  const nextTitle = (name: string) => {
+    const m = name.match(/^(.*?)(\s+)(\d+)$/);
+    return m ? `${m[1]}${m[2]}${Number(m[3]) + 1}` : `${name} 2`;
+  };
+
+  const useAll = () => {
+    if (!settings) return;
+    setGeneratePrefill({ ...settings, source: sourceText, title: nextTitle(title ?? "") });
+    onOpenChange(false);
+    navigate({ to: "/generate" });
+  };
+
+  const rows: Array<[string, string]> = settings
+    ? [
+        [t("Questions"), String(settings.count)],
+        [t("Difficulty"), settings.difficulty],
+        [t("Customisation"), settings.mode === "advanced" ? t("Advanced") : t("Simple")],
+        ...(settings.mode === "advanced"
+          ? ([
+              [t("Question length"), String(settings.spec?.questionLength ?? "—")],
+              [t("Answer length"), String(settings.spec?.answerLength ?? "—")],
+              [t("Complexity"), String(settings.spec?.complexity ?? "—")],
+              [t("Obscurity"), String(settings.spec?.obscurity ?? "—")],
+            ] as Array<[string, string]>)
+          : ([[t("Short questions & answers"), settings.spec?.shortQA ? t("Yes") : t("No")]] as Array<[string, string]>)),
+        ...(settings.subjects?.length
+          ? ([[t("Subject"), settings.subjects.map(subjectText).join(", ")]] as Array<[string, string]>)
+          : []),
+        ...(settings.audiences?.length
+          ? ([[t("For"), settings.audiences.map(audienceText).join(", ")]] as Array<[string, string]>)
+          : []),
+        ...(settings.instructions?.trim()
+          ? ([[t("Instructions"), settings.instructions.trim()]] as Array<[string, string]>)
+          : []),
+      ]
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-base sm:text-lg">{t("Sources used")}</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg">{t("Sources and customization used")}</DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            {t("Everything this quiz was generated from — your pasted text and any uploaded files.")}
+            {t("Everything this quiz was generated from — your pasted text, uploaded files and settings.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -422,13 +472,35 @@ function SourcesDialog({
           </div>
         )}
 
-        <pre className="max-h-[52vh] overflow-auto rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed whitespace-pre-wrap break-words">
+        <pre className="max-h-[40vh] overflow-auto rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed whitespace-pre-wrap break-words">
 {sourceText || t("No source text was stored for this quiz.")}
         </pre>
+
+        {rows.length > 0 && (
+          <div className="rounded-xl border border-border">
+            <table className="w-full text-xs sm:text-sm">
+              <tbody>
+                {rows.map(([k, v]) => (
+                  <tr key={k} className="border-b border-border last:border-0">
+                    <td className="w-[45%] px-3 py-2 text-muted-foreground">{k}</td>
+                    <td className="px-3 py-2 break-words font-medium">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {settings && (
+          <Button onClick={useAll} className="w-full">
+            <Sparkles className="mr-2 h-4 w-4" /> {t("Use all")}
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+
 
 function ExplainDialog({
   question,
