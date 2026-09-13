@@ -211,6 +211,71 @@ function GeneratePage() {
 
   const removeFile = (i: number) => setFiles((f) => f.filter((_, idx) => idx !== i));
 
+  const makeMark = (started: number, steps: StepTiming[]) => (label: string, from: number) => {
+    steps.push({ label, ms: performance.now() - from });
+    setTimings([...steps]);
+    setTotalMs(performance.now() - started);
+  };
+
+  /* Steps 3-6: generate → review → save, for a decided amount of questions */
+  const finishRun = async (combined: string, analysis: Analysis, useCount: number, started: number, steps: StepTiming[]) => {
+    const mark = makeMark(started, steps);
+    const guidance = buildGuidance(subjects, audiences, instructions);
+    try {
+      setStage("generating");
+      const t1 = performance.now();
+      const generated = await generateQuestions({
+        data: { sourceText: combined, count: useCount, difficulty, spec, analysis, guidance },
+      });
+      mark("Generating quiz", t1);
+
+      setStage("reviewing");
+      const t2 = performance.now();
+      const { questions } = await reviewAndRepair({
+        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance },
+      });
+      mark("Reviewing quiz", t2);
+
+      setStage("saving");
+      const t3 = performance.now();
+      const finalTitle = title.trim() || combined.slice(0, 60).replace(/\s+/g, " ") + (combined.length > 60 ? "…" : "");
+      const { data: inserted, error } = await supabase
+        .from("quiz_sets")
+        .insert({
+          user_id: user!.id,
+          title: finalTitle,
+          source_text: combined,
+          questions: JSON.parse(JSON.stringify(questions)),
+          question_count: questions.length,
+          settings: JSON.parse(
+            JSON.stringify({ count: useCount, difficulty, mode, spec, subjects, audiences, instructions }),
+          ),
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      mark("Saving set", t3);
+
+      const total = performance.now() - started;
+      setTotalMs(total);
+      saveTimings(inserted.id, steps, total);
+      setStage("done");
+      finished.current = true;
+      pending.current = null;
+      clearDraft();
+
+      if (questions.length < useCount) {
+        toast.success(`${t("Generated")} ${questions.length}/${useCount} — ${formatMs(total)}`);
+      } else {
+        toast.success(`${t("Generated")} ${questions.length} — ${formatMs(total)}`);
+      }
+      navigate({ to: "/export/$id", params: { id: inserted.id } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Generation failed"));
+      setStage("input");
+    }
+  };
+
   const run = async () => {
     if (!source.trim() && files.length === 0) {
       toast.error(t("Add source text or upload a file first."));
@@ -218,15 +283,11 @@ function GeneratePage() {
     }
     const started = performance.now();
     const steps: StepTiming[] = [];
-    const mark = (label: string, from: number) => {
-      const entry = { label, ms: performance.now() - from };
-      steps.push(entry);
-      setTimings([...steps]);
-      setTotalMs(performance.now() - started);
-    };
+    const mark = makeMark(started, steps);
 
+    let combined = source.trim();
+    let analysis: Analysis;
     try {
-      let combined = source.trim();
       setTimings([]);
       setTotalMs(0);
 
@@ -249,58 +310,48 @@ function GeneratePage() {
       setStage("analyzing");
       const t0a = performance.now();
       const guidance = buildGuidance(subjects, audiences, instructions);
-      const analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
+      analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
       mark("Analyzing notes", t0a);
-
-      setStage("generating");
-      const t1 = performance.now();
-      const generated = await generateQuestions({
-        data: { sourceText: combined, count, difficulty, spec, analysis, guidance },
-      });
-      mark("Generating quiz", t1);
-
-      setStage("reviewing");
-      const t2 = performance.now();
-      const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: count, analysis, guidance },
-      });
-      mark("Reviewing quiz", t2);
-
-
-      setStage("saving");
-      const t3 = performance.now();
-      const finalTitle = title.trim() || combined.slice(0, 60).replace(/\s+/g, " ") + (combined.length > 60 ? "…" : "");
-      const { data: inserted, error } = await supabase
-        .from("quiz_sets")
-        .insert({
-          user_id: user!.id,
-          title: finalTitle,
-          source_text: combined,
-          questions: JSON.parse(JSON.stringify(questions)),
-          question_count: questions.length,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      mark("Saving set", t3);
-
-      const total = performance.now() - started;
-      setTotalMs(total);
-      saveTimings(inserted.id, steps, total);
-      setStage("done");
-      finished.current = true;
-      clearDraft();
-
-      if (questions.length < count) {
-        toast.success(`${t("Generated")} ${questions.length}/${count} — ${formatMs(total)}`);
-      } else {
-        toast.success(`${t("Generated")} ${questions.length} — ${formatMs(total)}`);
-      }
-      navigate({ to: "/export/$id", params: { id: inserted.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Generation failed"));
       setStage("input");
+      return;
     }
+
+    /* Not enough material for the requested amount — pause and ask the user */
+    const supported = analysis.maxQuestions ?? 0;
+    if (supported > 0 && supported < count) {
+      const skip = getSkipInfoWarning();
+      if (skip.enabled && skip.action === "back") {
+        setStage("input");
+        toast.error(`${t("Your source only supports about")} ${supported} ${t("questions — add more information.")}`);
+        return;
+      }
+      if (skip.enabled) {
+        await finishRun(combined, analysis, supported, started, steps);
+        return;
+      }
+      pending.current = { combined, analysis, started, steps };
+      setCapacity(supported);
+      setCapacityChoice(String(supported));
+      setStage("insufficient");
+      return;
+    }
+
+    await finishRun(combined, analysis, count, started, steps);
+  };
+
+  const continueWithFewer = async () => {
+    const p = pending.current;
+    if (!p) return;
+    const chosen = Math.max(1, Math.min(capacity, Number(capacityChoice) || 1));
+    setCountText(String(chosen));
+    await finishRun(p.combined, p.analysis, chosen, p.started, p.steps);
+  };
+
+  const backToSources = () => {
+    pending.current = null;
+    setStage("input");
   };
 
   return (
