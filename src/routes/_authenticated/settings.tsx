@@ -139,6 +139,7 @@ function SettingsPage() {
     setPlanningEnabledValue(form.planning);
     setQuickQuizDeleteValue(form.quickQuizDelete);
     setQuickGroupDeleteValue(form.quickGroupDelete);
+    setSkipInfoWarningValue(form.skipInfo);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
     clearSettingsDraft();
@@ -156,6 +157,7 @@ function SettingsPage() {
       planning: true,
       quickQuizDelete: false,
       quickGroupDelete: false,
+      skipInfo: DEFAULT_SKIP_INFO,
       defaults: DEFAULT_QUIZ_DEFAULTS,
     });
     setTheme("dark");
