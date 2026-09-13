@@ -107,6 +107,37 @@ function validateQuestion(q: Question, sourceNorm: string): boolean {
   return false;
 }
 
+/* ---- near-duplicate detection (stops "the same question asked four ways") ---- */
+
+const STOP = new Set(
+  "a an the of in on at to for from by with and or is are was were which what who whom whose how why when does do did that this these those it its as into all body human".split(
+    " ",
+  ),
+);
+
+function contentWords(s: string) {
+  return new Set(
+    normalize(s)
+      .split(" ")
+      .filter((w) => w.length > 2 && !STOP.has(w)),
+  );
+}
+
+function jaccard(a: Set<string>, b: Set<string>) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  a.forEach((w) => { if (b.has(w)) inter++; });
+  return inter / (a.size + b.size - inter);
+}
+
+/** True when two questions essentially test the same fact. */
+export function tooSimilar(a: Question, b: Question) {
+  const sameAnswer = normalize(a.choices[a.correctIndex]) === normalize(b.choices[b.correctIndex]);
+  const sim = jaccard(contentWords(a.question), contentWords(b.question));
+  if (sameAnswer && sim >= 0.3) return true;
+  return sim >= 0.6;
+}
+
 /* Batch size scales with the requested amount:
    1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
 function batchSize(count: number) {
