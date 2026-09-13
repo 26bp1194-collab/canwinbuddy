@@ -453,6 +453,7 @@ function GeneratePage() {
                   id="instructions"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
+                  onKeyDown={(e) => listKeyDown(e, setInstructions)}
                   placeholder={t("e.g. Focus on dates and causes, avoid definitions, use real-world examples…")}
                   className="min-h-[80px] resize-y"
                 />
@@ -478,6 +479,40 @@ function GeneratePage() {
         ) : (
           <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 space-y-5 sm:mt-8">
             <StageProgress stage={stage} timings={timings} totalMs={totalMs} />
+            {stage === "insufficient" && (
+              <div className="panel space-y-4 border-destructive/40 p-5 sm:p-6">
+                <div>
+                  <h2 className="text-lg font-semibold">{t("Not enough information")}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("Your source can support about")} <span className="font-semibold text-foreground">{capacity}</span>{" "}
+                    {t("good questions, but you asked for")} <span className="font-semibold text-foreground">{count}</span>.{" "}
+                    {t("Add more information, or make a shorter quiz.")}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Button variant="secondary" onClick={backToSources}>
+                    {t("Add more sources")}
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      aria-label={t("Amount of questions")}
+                      value={capacityChoice}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9]/g, "");
+                        setCapacityChoice(v === "" ? "" : String(Math.min(capacity, Number(v))));
+                      }}
+                      onBlur={() => { if (!capacityChoice.trim()) setCapacityChoice("1"); }}
+                      className="w-20 shrink-0"
+                    />
+                    <Button onClick={continueWithFewer} className="min-w-0 flex-1">
+                      <span className="truncate">{t("Continue with less questions")}</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
