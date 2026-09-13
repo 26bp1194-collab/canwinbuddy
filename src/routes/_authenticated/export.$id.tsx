@@ -366,7 +366,13 @@ function ExportPage() {
         onApply={makeProgressive}
       />
 
-      <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} sourceText={(data.source_text as string) ?? ""} />
+      <SourcesDialog
+        open={sourcesOpen}
+        onOpenChange={setSourcesOpen}
+        sourceText={(data.source_text as string) ?? ""}
+        settings={(data.settings as unknown as QuizSettingsSnapshot | null) ?? null}
+        title={(data.title as string) ?? ""}
+      />
 
 
       <ExplainDialog
