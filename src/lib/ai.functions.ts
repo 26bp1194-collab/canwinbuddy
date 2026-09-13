@@ -451,7 +451,9 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
         );
         if (!replacement) continue;
         const dupe = others.some(
-          (a) => a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim(),
+          (a) =>
+            a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim() ||
+            tooSimilar(a, replacement),
         );
         /* Only swap in a replacement that is grounded in the notes and not a duplicate */
         if (dupe || !validateQuestion(replacement, sourceNorm)) continue;
