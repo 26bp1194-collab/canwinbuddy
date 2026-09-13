@@ -15,6 +15,8 @@ import {
   formatMs,
   getDraft,
   getQuizDefaults,
+  getSkipInfoWarning,
+  takeGeneratePrefill,
   quizDefaultsSignature,
   saveDraft,
   saveTimings,
@@ -25,6 +27,8 @@ import {
   type StepTiming,
   type StyleSpec,
 } from "@/lib/prefs";
+import { listKeyDown } from "@/lib/list-input";
+import type { Analysis } from "@/lib/ai.functions";
 
 import {
   SUBJECTS,
