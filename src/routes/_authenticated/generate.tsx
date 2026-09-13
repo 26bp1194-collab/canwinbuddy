@@ -858,7 +858,7 @@ function StageProgress({ stage, timings, totalMs }: { stage: Stage; timings: Ste
     { id: "saving", label: "Saving set" },
     { id: "done", label: "Complete" },
   ];
-  const order: Stage[] = ["input", "extracting", "analyzing", "generating", "reviewing", "saving", "done"];
+  const order: Stage[] = ["input", "extracting", "analyzing", "insufficient", "generating", "reviewing", "saving", "done"];
 
   const idx = order.indexOf(stage);
 
