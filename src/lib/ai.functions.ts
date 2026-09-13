@@ -235,6 +235,7 @@ COVERAGE:
 
 STYLE:
 - Vary correctIndex across 0,1,2,3 — do not bias toward 0 or 1.
+- NO NEAR-DUPLICATES: never test the same fact twice. Two questions with the same correct answer, or that reword the same sentence of the notes, are forbidden — even if the wording, the options or the order differ. Each question must target a different fact, relationship or detail.
 - Do not repeat or lightly rephrase questions already accepted.
 
 ${SELF_CONTAINED}
@@ -288,6 +289,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
         const dedupKey = q.question.toLowerCase().trim();
         if (seen.has(dedupKey)) continue;
         if (!validateQuestion(q, sourceNorm)) continue;
+        if (validated.some((a) => tooSimilar(a, q))) continue;
         seen.add(dedupKey);
         validated.push(q);
         addedThisRound++;
@@ -324,7 +326,7 @@ Check each question, in this order:
 2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
 3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
-5. Is it a duplicate or near-duplicate of another question in the set? (fail the later one)
+5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
 Each issue is one short, actionable sentence.${styleBlock(spec)}${guidanceBlock(guidance)}`;
 
 
