@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
     ],
     links: [{ rel: "canonical", href: `/export/${params.id}` }],
   }),
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { from?: string; groupId?: string; groupName?: string } => ({
     from: typeof s.from === "string" ? s.from : undefined,
     groupId: typeof s.groupId === "string" ? s.groupId : undefined,
     groupName: typeof s.groupName === "string" ? s.groupName : undefined,
@@ -68,6 +68,9 @@ function ExportPage() {
   const [progressiveOpen, setProgressiveOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const search = Route.useSearch();
   const qc = useQueryClient();
 
 
