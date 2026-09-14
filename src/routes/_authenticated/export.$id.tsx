@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles, MoreHorizontal, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,8 @@ import { subjectText, audienceText } from "@/lib/quiz-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { QuizGame } from "@/components/quiz-game";
+import { QuizResultsDialog } from "@/components/quiz-results";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,11 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
       { property: "og:url", content: `/export/${params.id}` },
     ],
     links: [{ rel: "canonical", href: `/export/${params.id}` }],
+  }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    from: typeof s.from === "string" ? s.from : undefined,
+    groupId: typeof s.groupId === "string" ? s.groupId : undefined,
+    groupName: typeof s.groupName === "string" ? s.groupName : undefined,
   }),
   component: ExportPage,
 });
