@@ -146,9 +146,7 @@ function ExportPage() {
         .select("id")
         .single();
       if (error) throw error;
-      const url = `${window.location.origin}/play/${row.id}`;
-      await navigator.clipboard.writeText(url).catch(() => undefined);
-      toast.success(t("Share link copied — anyone can play, no account needed."));
+      setShareUrl(`${window.location.origin}/play/${row.id}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Couldn't create a share link"));
     } finally {
@@ -214,10 +212,19 @@ function ExportPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
-      <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
-
-      </Link>
+      {search.from === "history" ? (
+        <Link to="/history" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {t("History")}
+        </Link>
+      ) : search.from === "group" && search.groupId ? (
+        <Link to="/group/$id" params={{ id: search.groupId }} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {search.groupName || t("Group")}
+        </Link>
+      ) : (
+        <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
+        </Link>
+      )}
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <div className="min-w-0">
@@ -272,28 +279,39 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-            <Button onClick={copy}>
+          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
+            <Button onClick={() => setPlaying(true)}>
+              <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
+            </Button>
+            <Button variant="secondary" onClick={() => setResultsOpen(true)} aria-label={t("Results history")}>
+              <History className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("History")}</span>
+            </Button>
+            <Button variant="secondary" onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
             </Button>
-            <Button variant="secondary" onClick={download}>
-              <Download className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Download")}</span>
-            </Button>
-            <Button variant="secondary" onClick={() => setPlaying(true)}>
-              <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
-            </Button>
-            <Button variant="secondary" onClick={() => setSourcesOpen(true)} aria-label={t("Sources")}>
-              <FileText className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Sources")}</span>
-            </Button>
-            <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
-              {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
-              <span className="hidden sm:inline">{t("Share")}</span>
-
-            </Button>
-            <Button variant="secondary" onClick={() => setProgressiveOpen(true)} aria-label={t("New quiz")}>
-              <Sparkles className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("New quiz")}</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" aria-label={t("More")}>
+                  <MoreHorizontal className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("More")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={download}>
+                  <Download className="mr-2 h-4 w-4" /> {t("Download")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSourcesOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> {t("Sources")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={sharing} onClick={share}>
+                  {sharing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+                  {t("Share")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setProgressiveOpen(true)}>
+                  <Sparkles className="mr-2 h-4 w-4" /> {t("Follow-up quiz")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
         </div>
@@ -313,6 +331,9 @@ function ExportPage() {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <Button size="sm" variant="ghost" disabled={selected.length === 0} onClick={() => setSelected([])}>
+              <Square className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Unselect all")}</span>
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => { setSelected(original.map((_, i) => i)); setEditOpen(true); }}>
               <Wand2 className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Edit all")}</span>
             </Button>
