@@ -110,7 +110,7 @@ function Dashboard() {
                 <li key={r.id}>
                   <Link
                     to="/export/$id"
-                    params={{ id: r.id }}
+                    params={{ id: r.id }} search={{}}
                     className="flex items-center justify-between rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-accent"
                   >
                     <span className="truncate font-medium">{r.title}</span>

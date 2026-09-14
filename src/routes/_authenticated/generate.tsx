@@ -269,7 +269,7 @@ function GeneratePage() {
       } else {
         toast.success(`${t("Generated")} ${questions.length} — ${formatMs(total)}`);
       }
-      navigate({ to: "/export/$id", params: { id: inserted.id } });
+      navigate({ to: "/export/$id", params: { id: inserted.id }, search: {} });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Generation failed"));
       setStage("input");

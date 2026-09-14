@@ -321,7 +321,7 @@ function GroupPage() {
             {visibleRows.map((row) => (
               <motion.li key={row.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="panel">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1 p-2 pl-4 sm:gap-2 sm:p-4 sm:pl-5">
-                  <Link to="/export/$id" params={{ id: row.id }} className="min-w-0 py-2">
+                  <Link to="/export/$id" params={{ id: row.id }} search={{ from: "group", groupId: id, groupName: group?.name ?? undefined }} className="min-w-0 py-2">
                     <p className="truncate font-medium">{row.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {row.question_count} {t("questions")} · {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
