@@ -99,7 +99,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
       correctIndex: q.correctIndex,
       chosenIndex: selected,
       correct: selected === q.correctIndex,
-      explanation: q.explanation,
+      explanation: undefined,
     };
     const rows = [...answers, row];
     setAnswers(rows);
