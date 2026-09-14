@@ -833,7 +833,7 @@ function ProgressiveDialog({
         `${t("Build a follow-up quiz on the same source. Every question must be freshly worded and must not repeat the current questions.")} ${prompt.trim()}`.trim(),
         [pick],
       );
-      toast.success(t("New quiz created"));
+      toast.success(t("Follow-up quiz created"));
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Couldn't create the new quiz"));
@@ -846,7 +846,7 @@ function ProgressiveDialog({
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
       <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-base sm:text-lg">{t("New quiz")}</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg">{t("Follow-up quiz")}</DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
             {t("Make a follow-up quiz from this one. Pick a difficulty change and add a comment if you want.")}
           </DialogDescription>
