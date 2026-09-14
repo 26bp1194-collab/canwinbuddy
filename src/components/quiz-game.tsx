@@ -1,20 +1,34 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, XCircle, Trophy } from "lucide-react";
+import { X, Check, XCircle, Trophy, RotateCcw, ListChecks, Loader2 } from "lucide-react";
 
-import { type Question } from "@/lib/ai.functions";
+import { type Question, explainWrongAnswers } from "@/lib/ai.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+
+export type ResultDetail = {
+  question: string;
+  choices: string[];
+  correctIndex: number;
+  chosenIndex: number;
+  correct: boolean;
+  explanation?: string;
+};
 
 interface Props {
   questions: Question[];
   onClose: () => void;
   title: string;
   guest?: boolean;
+  /** When set (and not a guest), finished sessions are saved to your results history. */
+  quizSetId?: string;
+  sourceText?: string;
+  onSaved?: () => void;
 }
 
-export function QuizGame({ questions, onClose, title }: Props) {
+export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceText, onSaved }: Props) {
   const t = useT();
   const [seed, setSeed] = useState(0);
   const shuffled = useMemo(() => {
@@ -35,9 +49,14 @@ export function QuizGame({ questions, onClose, title }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [answers, setAnswers] = useState<ResultDetail[]>([]);
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailing, setDetailing] = useState(false);
+  const [details, setDetails] = useState<ResultDetail[]>([]);
 
   const q = shuffled[i];
   const progress = ((i + (selected !== null ? 1 : 0)) / shuffled.length) * 100;
+  const started = answers.length > 0 || selected !== null;
 
   const pick = (idx: number) => {
     if (selected !== null) return;
@@ -45,9 +64,48 @@ export function QuizGame({ questions, onClose, title }: Props) {
     if (idx === q.correctIndex) setScore((s) => s + 1);
   };
 
+  const saveSession = async (rows: ResultDetail[], correct: number) => {
+    if (guest || !quizSetId) return;
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return;
+      const { count } = await supabase
+        .from("quiz_results")
+        .select("id", { count: "exact", head: true })
+        .eq("quiz_set_id", quizSetId);
+      const n = (count ?? 0) + 1;
+      const suffix = n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
+      await supabase.from("quiz_results").insert({
+        user_id: uid,
+        quiz_set_id: quizSetId,
+        name: `${n}${suffix} quiz results`,
+        total: rows.length,
+        correct,
+        incorrect: rows.length - correct,
+        details: JSON.parse(JSON.stringify(rows)),
+      });
+      onSaved?.();
+    } catch {
+      /* results history is best-effort */
+    }
+  };
+
   const next = () => {
+    if (selected === null) return;
+    const row: ResultDetail = {
+      question: q.question,
+      choices: q.choices,
+      correctIndex: q.correctIndex,
+      chosenIndex: selected,
+      correct: selected === q.correctIndex,
+      explanation: undefined,
+    };
+    const rows = [...answers, row];
+    setAnswers(rows);
     if (i + 1 >= shuffled.length) {
       setFinished(true);
+      void saveSession(rows, rows.filter((r) => r.correct).length);
     } else {
       setI((n) => n + 1);
       setSelected(null);
@@ -59,8 +117,42 @@ export function QuizGame({ questions, onClose, title }: Props) {
     setScore(0);
     setSelected(null);
     setFinished(false);
+    setAnswers([]);
+    setDetails([]);
+    setShowDetails(false);
     setSeed((s) => s + 1);
   };
+
+  const seeResults = async () => {
+    setShowDetails(true);
+    if (details.length) return;
+    const wrong = answers.filter((a) => !a.correct);
+    if (!wrong.length) {
+      setDetails(answers);
+      return;
+    }
+    setDetailing(true);
+    try {
+      const { explanations } = await explainWrongAnswers({
+        data: {
+          sourceText,
+          items: wrong.map((a) => ({
+            question: a.question,
+            correct: a.choices[a.correctIndex],
+            chosen: a.choices[a.chosenIndex],
+          })),
+        },
+      });
+      let k = 0;
+      setDetails(answers.map((a) => (a.correct ? a : { ...a, explanation: explanations[k++] ?? a.explanation })));
+    } catch {
+      setDetails(answers);
+    } finally {
+      setDetailing(false);
+    }
+  };
+
+  const rows = details.length ? details : answers;
 
   return (
     <motion.div
@@ -75,28 +167,84 @@ export function QuizGame({ questions, onClose, title }: Props) {
             <p className="truncate text-xs uppercase tracking-wider text-muted-foreground">{t("Playing")}</p>
             <p className="truncate font-medium">{title}</p>
           </div>
-          <button onClick={onClose} aria-label={t("Close")} className="shrink-0 text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!finished && started && (
+              <Button size="sm" variant="secondary" onClick={replay}>
+                <RotateCcw className="h-3.5 w-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">{t("Reset quiz")}</span>
+              </Button>
+            )}
+            <button onClick={onClose} aria-label={t("Close")} className="text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {finished ? (
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-4 text-center sm:py-8">
-            <Trophy className="mx-auto h-12 w-12 text-primary sm:h-14 sm:w-14" />
-            <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">{t("Nice work")}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{t("You scored")}</p>
-            <p className="mt-2 font-display text-4xl font-bold text-primary sm:text-5xl">
-              {score} / {shuffled.length}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {Math.round((score / shuffled.length) * 100)}% {t("correct")}
-            </p>
-
-            <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
-              <Button onClick={replay}>{t("Play again")}</Button>
-              <Button variant="secondary" onClick={onClose}>{t("Close")}</Button>
+          showDetails ? (
+            <div className="py-2">
+              <h2 className="font-display text-xl font-bold sm:text-2xl">{t("Your results")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {score} / {shuffled.length} {t("correct")}
+              </p>
+              {detailing && (
+                <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Thinking…")}
+                </p>
+              )}
+              <ul className="mt-4 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+                {rows.map((r, idx) => (
+                  <li key={idx} className="rounded-xl border border-border bg-secondary/40 p-3 text-left">
+                    <p className="text-sm font-medium">
+                      <span className="mr-2 text-primary">{idx + 1}.</span>
+                      {r.question}
+                    </p>
+                    <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                      {r.correct ? (
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
+                      ) : (
+                        <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                      )}
+                      <span>
+                        {t("You answered")}: <span className="text-foreground">{r.choices[r.chosenIndex]}</span>
+                        {!r.correct && (
+                          <>
+                            {" · "}
+                            {t("Correct")}: <span className="text-foreground">{r.choices[r.correctIndex]}</span>
+                          </>
+                        )}
+                      </span>
+                    </p>
+                    {r.explanation && <p className="mt-2 text-xs leading-relaxed">{r.explanation}</p>}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-6 flex flex-col justify-end gap-2 sm:flex-row">
+                <Button variant="secondary" onClick={() => setShowDetails(false)}>{t("Back")}</Button>
+                <Button onClick={replay}>{t("Play again")}</Button>
+              </div>
             </div>
-          </motion.div>
+          ) : (
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="py-4 text-center sm:py-8">
+              <Trophy className="mx-auto h-12 w-12 text-primary sm:h-14 sm:w-14" />
+              <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">{t("Nice work")}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{t("You scored")}</p>
+              <p className="mt-2 font-display text-4xl font-bold text-primary sm:text-5xl">
+                {score} / {shuffled.length}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {Math.round((score / shuffled.length) * 100)}% {t("correct")}
+              </p>
+
+              <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+                <Button onClick={seeResults}>
+                  <ListChecks className="mr-2 h-4 w-4" /> {t("See results")}
+                </Button>
+                <Button variant="secondary" onClick={replay}>{t("Play again")}</Button>
+                <Button variant="ghost" onClick={onClose}>{t("Close")}</Button>
+              </div>
+            </motion.div>
+          )
         ) : (
           <>
             <Progress value={progress} className="mb-6 h-1.5" />

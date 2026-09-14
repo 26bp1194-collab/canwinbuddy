@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles, MoreHorizontal, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,8 @@ import { subjectText, audienceText } from "@/lib/quiz-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { QuizGame } from "@/components/quiz-game";
+import { QuizResultsDialog } from "@/components/quiz-results";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,11 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
       { property: "og:url", content: `/export/${params.id}` },
     ],
     links: [{ rel: "canonical", href: `/export/${params.id}` }],
+  }),
+  validateSearch: (s: Record<string, unknown>): { from?: string; groupId?: string; groupName?: string } => ({
+    from: typeof s.from === "string" ? s.from : undefined,
+    groupId: typeof s.groupId === "string" ? s.groupId : undefined,
+    groupName: typeof s.groupName === "string" ? s.groupName : undefined,
   }),
   component: ExportPage,
 });
@@ -61,6 +68,9 @@ function ExportPage() {
   const [progressiveOpen, setProgressiveOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const search = Route.useSearch();
   const qc = useQueryClient();
 
 
@@ -136,9 +146,7 @@ function ExportPage() {
         .select("id")
         .single();
       if (error) throw error;
-      const url = `${window.location.origin}/play/${row.id}`;
-      await navigator.clipboard.writeText(url).catch(() => undefined);
-      toast.success(t("Share link copied — anyone can play, no account needed."));
+      setShareUrl(`${window.location.origin}/play/${row.id}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Couldn't create a share link"));
     } finally {
@@ -204,10 +212,19 @@ function ExportPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
-      <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
-
-      </Link>
+      {search.from === "history" ? (
+        <Link to="/history" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {t("History")}
+        </Link>
+      ) : search.from === "group" && search.groupId ? (
+        <Link to="/group/$id" params={{ id: search.groupId }} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {search.groupName || t("Group")}
+        </Link>
+      ) : (
+        <Link to="/generate" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {t("Generate another quiz")}
+        </Link>
+      )}
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <div className="min-w-0">
@@ -262,28 +279,39 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-            <Button onClick={copy}>
+          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
+            <Button onClick={() => setPlaying(true)}>
+              <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
+            </Button>
+            <Button variant="secondary" onClick={() => setResultsOpen(true)} aria-label={t("Results history")}>
+              <History className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("History")}</span>
+            </Button>
+            <Button variant="secondary" onClick={copy}>
               {copied ? <Check className="h-4 w-4 sm:mr-2" /> : <Copy className="h-4 w-4 sm:mr-2" />}
               <span className="hidden sm:inline">{copied ? t("Copied") : t("Copy")}</span>
             </Button>
-            <Button variant="secondary" onClick={download}>
-              <Download className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Download")}</span>
-            </Button>
-            <Button variant="secondary" onClick={() => setPlaying(true)}>
-              <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
-            </Button>
-            <Button variant="secondary" onClick={() => setSourcesOpen(true)} aria-label={t("Sources")}>
-              <FileText className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Sources")}</span>
-            </Button>
-            <Button variant="secondary" onClick={share} disabled={sharing} aria-label={t("Share link")}>
-              {sharing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <Share2 className="h-4 w-4 sm:mr-2" />}
-              <span className="hidden sm:inline">{t("Share")}</span>
-
-            </Button>
-            <Button variant="secondary" onClick={() => setProgressiveOpen(true)} aria-label={t("New quiz")}>
-              <Sparkles className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("New quiz")}</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" aria-label={t("More")}>
+                  <MoreHorizontal className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("More")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={download}>
+                  <Download className="mr-2 h-4 w-4" /> {t("Download")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSourcesOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> {t("Sources")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={sharing} onClick={share}>
+                  {sharing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+                  {t("Share")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setProgressiveOpen(true)}>
+                  <Sparkles className="mr-2 h-4 w-4" /> {t("Follow-up quiz")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
         </div>
@@ -303,6 +331,9 @@ function ExportPage() {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <Button size="sm" variant="ghost" disabled={selected.length === 0} onClick={() => setSelected([])}>
+              <Square className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Unselect all")}</span>
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => { setSelected(original.map((_, i) => i)); setEditOpen(true); }}>
               <Wand2 className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t("Edit all")}</span>
             </Button>
@@ -383,8 +414,43 @@ function ExportPage() {
 
 
 
+      <QuizResultsDialog open={resultsOpen} onOpenChange={setResultsOpen} quizSetId={id} />
+
+      <Dialog open={shareUrl !== null} onOpenChange={(v) => !v && setShareUrl(null)}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("Share this quiz")}</DialogTitle>
+            <DialogDescription>{t("Anyone with this link can play — no account needed.")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={shareUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (shareUrl) void navigator.clipboard.writeText(shareUrl);
+                toast.success(t("Link copied"));
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShareUrl(null)}>{t("Done")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AnimatePresence>
-        {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
+        {playing && (
+          <QuizGame
+            questions={questions}
+            onClose={() => setPlaying(false)}
+            title={data.title}
+            quizSetId={id}
+            sourceText={(data.source_text as string) ?? ""}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["quiz-results", id] })}
+          />
+        )}
       </AnimatePresence>
 
       <div className="mt-6 flex items-center justify-between text-sm">
@@ -767,7 +833,7 @@ function ProgressiveDialog({
         `${t("Build a follow-up quiz on the same source. Every question must be freshly worded and must not repeat the current questions.")} ${prompt.trim()}`.trim(),
         [pick],
       );
-      toast.success(t("New quiz created"));
+      toast.success(t("Follow-up quiz created"));
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Couldn't create the new quiz"));
@@ -780,7 +846,7 @@ function ProgressiveDialog({
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
       <DialogContent className="max-h-[88vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-base sm:text-lg">{t("New quiz")}</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg">{t("Follow-up quiz")}</DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
             {t("Make a follow-up quiz from this one. Pick a difficulty change and add a comment if you want.")}
           </DialogDescription>
