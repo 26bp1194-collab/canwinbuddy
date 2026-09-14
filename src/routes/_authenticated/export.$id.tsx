@@ -414,8 +414,43 @@ function ExportPage() {
 
 
 
+      <QuizResultsDialog open={resultsOpen} onOpenChange={setResultsOpen} quizSetId={id} />
+
+      <Dialog open={shareUrl !== null} onOpenChange={(v) => !v && setShareUrl(null)}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("Share this quiz")}</DialogTitle>
+            <DialogDescription>{t("Anyone with this link can play — no account needed.")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={shareUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (shareUrl) void navigator.clipboard.writeText(shareUrl);
+                toast.success(t("Link copied"));
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShareUrl(null)}>{t("Done")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AnimatePresence>
-        {playing && <QuizGame questions={questions} onClose={() => setPlaying(false)} title={data.title} />}
+        {playing && (
+          <QuizGame
+            questions={questions}
+            onClose={() => setPlaying(false)}
+            title={data.title}
+            quizSetId={id}
+            sourceText={(data.source_text as string) ?? ""}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["quiz-results", id] })}
+          />
+        )}
       </AnimatePresence>
 
       <div className="mt-6 flex items-center justify-between text-sm">
