@@ -473,6 +473,7 @@ function GeneratePage() {
         ) : stage === "input" ? (
           <motion.div key="customisation" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
+              <h2 className="text-lg font-semibold">{t("Quiz Customisation")}</h2>
               <div>
                 <Label htmlFor="instructions" className="mb-2 block">
                   {t("Instructions")} <span className="text-muted-foreground">({t("optional")})</span>
