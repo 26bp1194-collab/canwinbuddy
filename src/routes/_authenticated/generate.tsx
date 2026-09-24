@@ -95,6 +95,7 @@ function GeneratePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [generateStep, setGenerateStep] = useState<GenerateStep>("notes");
+  const [customisationVisited, setCustomisationVisited] = useState(false);
   const [timings, setTimings] = useState<StepTiming[]>([]);
   const [totalMs, setTotalMs] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -360,7 +361,9 @@ function GeneratePage() {
   const heading = stage !== "input"
     ? [t("Generate: Notes"), t("Customisation"), t("Generating…")]
     : generateStep === "notes"
-      ? [t("Generate: Noting…")]
+      ? customisationVisited
+        ? [t("Generate: Noting…"), t("Generation")]
+        : [t("Generate: Noting…")]
       : [t("Generate: Notes"), t("Customising…")];
 
   return (
@@ -461,7 +464,7 @@ function GeneratePage() {
                 )}
               </div>
               <div className="flex justify-end border-t border-border pt-4">
-                <Button type="button" size="sm" onClick={() => setGenerateStep("customisation")} className="min-w-24">
+                <Button type="button" size="sm" onClick={() => { setCustomisationVisited(true); setGenerateStep("customisation"); }} className="min-w-24">
                   {t("Next")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
