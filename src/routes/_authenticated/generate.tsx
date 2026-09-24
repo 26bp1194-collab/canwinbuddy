@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw, Plus, Trash2 } from "lucide-react";
+import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw, Plus, Trash2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
@@ -61,6 +61,7 @@ export const Route = createFileRoute("/_authenticated/generate")({
 });
 
 type Stage = "input" | "extracting" | "analyzing" | "insufficient" | "generating" | "reviewing" | "saving" | "done";
+type GenerateStep = "notes" | "customisation";
 const SUGGESTION_KEY = "cwb:next-quiz";
 
 function GeneratePage() {
@@ -93,6 +94,7 @@ function GeneratePage() {
 
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
+  const [generateStep, setGenerateStep] = useState<GenerateStep>("notes");
   const [timings, setTimings] = useState<StepTiming[]>([]);
   const [totalMs, setTotalMs] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -352,20 +354,34 @@ function GeneratePage() {
   const backToSources = () => {
     pending.current = null;
     setStage("input");
+    setGenerateStep("notes");
   };
+
+  const heading = stage !== "input"
+    ? [t("Generate: Notes"), t("Customisation"), t("Generating…")]
+    : generateStep === "notes"
+      ? [t("Generate: Noting…")]
+      : [t("Generate: Notes"), t("Customising…")];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-8 sm:py-10 md:pb-10">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t("Generate")}</h1>
+        <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-3xl font-bold tracking-tight sm:text-4xl">
+          {heading.map((label, index) => (
+            <span key={label} className="inline-flex items-center gap-2">
+              {index > 0 && <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground sm:h-6 sm:w-6" aria-hidden="true" />}
+              <span>{label}</span>
+            </span>
+          ))}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground sm:text-base">
           {t("Paste text or upload a source. AI generates, validates, and saves your set.")}
         </p>
       </motion.div>
 
       <AnimatePresence mode="wait">
-        {stage === "input" ? (
-          <motion.div key="input" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-6 space-y-5 sm:mt-8">
+        {stage === "input" && generateStep === "notes" ? (
+          <motion.div key="notes" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
               <div>
                 <Label htmlFor="title" className="mb-2 block">
@@ -444,7 +460,16 @@ function GeneratePage() {
                   </ul>
                 )}
               </div>
-
+              <div className="flex justify-end border-t border-border pt-4">
+                <Button type="button" size="sm" onClick={() => setGenerateStep("customisation")} className="min-w-24">
+                  {t("Next")} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        ) : stage === "input" ? (
+          <motion.div key="customisation" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} className="mt-6 space-y-5 sm:mt-8">
+            <div className="panel space-y-5 p-4 sm:p-6">
               <div>
                 <Label htmlFor="instructions" className="mb-2 block">
                   {t("Instructions")} <span className="text-muted-foreground">({t("optional")})</span>
@@ -455,7 +480,7 @@ function GeneratePage() {
                   onChange={(e) => setInstructions(e.target.value)}
                   onKeyDown={(e) => listKeyDown(e, setInstructions)}
                   placeholder={t("e.g. Focus on dates and causes, avoid definitions, use real-world examples…")}
-                  className="min-h-[80px] resize-y"
+                  className="min-h-[100px] resize-y"
                 />
               </div>
 
@@ -469,11 +494,14 @@ function GeneratePage() {
                 onReset={resetSettings}
               />
 
-
-
-              <Button size="lg" onClick={run} className="w-full">
-                <Sparkles className="mr-2 h-4 w-4" /> {t("Generate quiz")}
-              </Button>
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setGenerateStep("notes")} className="min-w-24">
+                  {t("Back")}
+                </Button>
+                <Button type="button" size="sm" onClick={run} className="min-w-24">
+                  <Sparkles className="mr-2 h-4 w-4" /> {t("Generate")}
+                </Button>
+              </div>
             </div>
           </motion.div>
         ) : (
