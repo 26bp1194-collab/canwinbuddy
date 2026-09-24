@@ -473,7 +473,6 @@ function GeneratePage() {
         ) : stage === "input" ? (
           <motion.div key="customisation" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
-              <h2 className="text-lg font-semibold">{t("Quiz Customisation")}</h2>
               <div>
                 <Label htmlFor="instructions" className="mb-2 block">
                   {t("Instructions")} <span className="text-muted-foreground">({t("optional")})</span>
@@ -770,7 +769,8 @@ export function DifficultyControls({
   return (
     <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
       {onReset && (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">{t("Quiz Customisation")}</h2>
           <Button type="button" variant="ghost" size="sm" onClick={onReset}>
             <RotateCcw className="h-3.5 w-3.5 sm:mr-1.5" />
             <span className="hidden sm:inline">{t("Reset")}</span>
