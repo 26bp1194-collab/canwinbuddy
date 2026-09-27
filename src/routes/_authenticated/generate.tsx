@@ -22,8 +22,10 @@ import {
   saveTimings,
   DEFAULT_SPEC,
   DEFAULT_SPEC_ADVANCED,
+  CURRICULA,
 
   type Difficulty,
+  type Curriculum,
   type StepTiming,
   type StyleSpec,
 } from "@/lib/prefs";
@@ -35,6 +37,7 @@ import {
   AGES,
   ageLabel,
   buildGuidance,
+  curriculumText,
   type AudienceEntry,
   type SubjectEntry,
 } from "@/lib/quiz-context";
@@ -74,6 +77,8 @@ function GeneratePage() {
   const count = Math.max(1, Math.min(100, Number(countText) || 1));
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [curriculum, setCurriculum] = useState<Curriculum>("none");
+  const [customCurriculum, setCustomCurriculum] = useState("");
   const [mode, setMode] = useState<"simple" | "advanced">("simple");
   const [specs, setSpecs] = useState<{ simple: StyleSpec; advanced: StyleSpec }>({
     simple: DEFAULT_SPEC,
@@ -124,6 +129,8 @@ function GeneratePage() {
     }
     setCountText(String(defaults.count));
     setDifficulty(defaults.difficulty);
+    setCurriculum(defaults.curriculum);
+    setCustomCurriculum(defaults.customCurriculum);
     setMode("simple");
     setSpecs({
       simple: { ...DEFAULT_SPEC, ...defaults.spec, mode: "simple" },
@@ -139,6 +146,8 @@ function GeneratePage() {
       if (prefill.audiences?.length) setAudiences(prefill.audiences);
       setCountText(String(prefill.count));
       setDifficulty(prefill.difficulty);
+      setCurriculum(prefill.curriculum ?? "none");
+      setCustomCurriculum(prefill.customCurriculum ?? "");
       setMode(prefill.mode ?? "simple");
       if (prefill.spec) {
         setSpecs((s) => ({ ...s, [prefill.mode ?? "simple"]: { ...prefill.spec, mode: prefill.mode ?? "simple" } }));
@@ -173,6 +182,7 @@ function GeneratePage() {
       mode === "simple" &&
       count === d.count &&
       difficulty === d.difficulty &&
+      curriculum === d.curriculum && customCurriculum === d.customCurriculum &&
       JSON.stringify(specs.simple) === JSON.stringify({ ...DEFAULT_SPEC, ...d.spec, mode: "simple" }) &&
       JSON.stringify(specs.advanced) === JSON.stringify({ ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" });
     const contextIsDefault =
@@ -183,14 +193,16 @@ function GeneratePage() {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, spec, mode, specs, subjects, audiences, instructions, defaultsSig: quizDefaultsSignature() });
-  }, [source, title, count, countText, difficulty, spec, mode, specs, subjects, audiences, instructions]);
+    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, defaultsSig: quizDefaultsSignature() });
+  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions]);
 
 
   const resetSettings = () => {
     const d = getQuizDefaults();
     setCountText(String(d.count));
     setDifficulty(d.difficulty);
+    setCurriculum(d.curriculum);
+    setCustomCurriculum(d.customCurriculum);
     setSpecs({
       simple: { ...DEFAULT_SPEC, ...d.spec, mode: "simple" },
       advanced: { ...DEFAULT_SPEC_ADVANCED, ...d.specAdvanced, mode: "advanced" },
@@ -223,7 +235,7 @@ function GeneratePage() {
   /* Steps 3-6: generate → review → save, for a decided amount of questions */
   const finishRun = async (combined: string, analysis: Analysis, useCount: number, started: number, steps: StepTiming[]) => {
     const mark = makeMark(started, steps);
-    const guidance = buildGuidance(subjects, audiences, instructions);
+    const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
     try {
       setStage("generating");
       const t1 = performance.now();
@@ -251,7 +263,7 @@ function GeneratePage() {
           questions: JSON.parse(JSON.stringify(questions)),
           question_count: questions.length,
           settings: JSON.parse(
-            JSON.stringify({ count: useCount, difficulty, mode, spec, subjects, audiences, instructions }),
+             JSON.stringify({ count: useCount, difficulty, curriculum, customCurriculum, mode, spec, subjects, audiences, instructions }),
           ),
         })
         .select("id")
@@ -312,7 +324,7 @@ function GeneratePage() {
 
       setStage("analyzing");
       const t0a = performance.now();
-      const guidance = buildGuidance(subjects, audiences, instructions);
+       const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
       analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
       mark("Analyzing notes", t0a);
     } catch (e) {
@@ -490,6 +502,10 @@ function GeneratePage() {
               <DifficultyControls
                 difficulty={difficulty}
                 setDifficulty={setDifficulty}
+                 curriculum={curriculum}
+                 setCurriculum={setCurriculum}
+                 customCurriculum={customCurriculum}
+                 setCustomCurriculum={setCustomCurriculum}
                 spec={spec}
                 setSpec={setSpec}
                 countText={countText}
@@ -717,6 +733,10 @@ function AudienceFields({
 export function DifficultyControls({
   difficulty,
   setDifficulty,
+  curriculum,
+  setCurriculum,
+  customCurriculum,
+  setCustomCurriculum,
   spec,
   setSpec,
   countText,
@@ -725,6 +745,10 @@ export function DifficultyControls({
 }: {
   difficulty: Difficulty;
   setDifficulty: (d: Difficulty) => void;
+  curriculum: Curriculum;
+  setCurriculum: (v: Curriculum) => void;
+  customCurriculum: string;
+  setCustomCurriculum: (v: string) => void;
   spec: StyleSpec;
   setSpec: (s: StyleSpec) => void;
   countText: string;
@@ -763,6 +787,27 @@ export function DifficultyControls({
           <SelectItem value="hard">{t("Hard")}</SelectItem>
         </SelectContent>
       </Select>
+    </div>
+  );
+
+  const curriculumField = (
+    <div className="min-w-0">
+      <Label className="mb-2 block">{t("Curriculum")}</Label>
+      <Select value={curriculum} onValueChange={(v) => setCurriculum(v as Curriculum)}>
+        <SelectTrigger aria-label={t("Curriculum")} className="w-full min-w-0"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">{t("None")}</SelectItem>
+          {CURRICULA.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+          <SelectItem value="other">{t("Other")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const customCurriculumField = curriculum === "other" && (
+    <div>
+      <Label htmlFor="custom-curriculum" className="mb-2 block">{t("Your curriculum")}</Label>
+      <Input id="custom-curriculum" value={customCurriculum} onChange={(e) => setCustomCurriculum(e.target.value)} maxLength={100} />
     </div>
   );
 
@@ -807,6 +852,11 @@ export function DifficultyControls({
             {countField}
             {difficultyField}
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div />
+            {curriculumField}
+          </div>
+          {customCurriculumField}
           <button
             type="button"
             onClick={() => setSpec({ ...spec, shortQA: !spec.shortQA })}
@@ -823,7 +873,11 @@ export function DifficultyControls({
         </>
       ) : (
         <div className="space-y-4">
-          {countField}
+          <div className="grid grid-cols-2 gap-3">
+            {countField}
+            {curriculumField}
+          </div>
+          {customCurriculumField}
           <div className="grid grid-cols-2 gap-3">
             <BarRow label={t("Question length")} low={t("Short")} high={t("Long")} value={spec.questionLength} onChange={(v) => setSpec({ ...spec, questionLength: v })} />
             <BarRow label={t("Answer length")} low={t("Short")} high={t("Long")} value={spec.answerLength} onChange={(v) => setSpec({ ...spec, answerLength: v })} />
