@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Check, XCircle, Trophy, RotateCcw, ListChecks, Loader2 } from "lucide-react";
 
@@ -31,7 +31,11 @@ interface Props {
 export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceText, onSaved }: Props) {
   const t = useT();
   const [seed, setSeed] = useState(0);
+  const [savedOrder, setSavedOrder] = useState<Question[] | null>(null);
+  const [ready, setReady] = useState(false);
+  const sessionKey = `cwb:play:${quizSetId ?? (guest ? `guest:${title}` : title)}`;
   const shuffled = useMemo(() => {
+    if (savedOrder) return savedOrder;
     void seed;
     return [...questions]
       .sort(() => Math.random() - 0.5)
@@ -44,7 +48,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
           correctIndex: Math.max(0, order.indexOf(q.correctIndex)),
         };
       });
-  }, [questions, seed]);
+  }, [questions, seed, savedOrder]);
   const [i, setI] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
@@ -57,6 +61,33 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   const q = shuffled[i];
   const progress = ((i + (selected !== null ? 1 : 0)) / shuffled.length) * 100;
   const started = answers.length > 0 || selected !== null;
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(sessionKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          signature: string; order: Question[]; i: number; selected: number | null;
+          score: number; answers: ResultDetail[];
+        };
+        if (saved.signature === JSON.stringify(questions) && saved.order.length === questions.length && saved.i >= 0 && saved.i < questions.length) {
+          setSavedOrder(saved.order);
+          setI(saved.i);
+          setSelected(saved.selected);
+          setScore(saved.score);
+          setAnswers(saved.answers);
+        } else window.localStorage.removeItem(sessionKey);
+      }
+    } catch { /* invalid or unavailable session storage */ }
+    setReady(true);
+  }, [sessionKey, questions]);
+
+  useEffect(() => {
+    if (!ready || finished || !started) return;
+    try {
+      window.localStorage.setItem(sessionKey, JSON.stringify({ signature: JSON.stringify(questions), order: shuffled, i, selected, score, answers }));
+    } catch { /* storage may be unavailable */ }
+  }, [ready, finished, started, sessionKey, questions, shuffled, i, selected, score, answers]);
 
   const pick = (idx: number) => {
     if (selected !== null) return;
@@ -104,6 +135,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
     const rows = [...answers, row];
     setAnswers(rows);
     if (i + 1 >= shuffled.length) {
+      try { window.localStorage.removeItem(sessionKey); } catch { /* ignore */ }
       setFinished(true);
       void saveSession(rows, rows.filter((r) => r.correct).length);
     } else {
@@ -113,6 +145,8 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   };
 
   const replay = () => {
+    try { window.localStorage.removeItem(sessionKey); } catch { /* ignore */ }
+    setSavedOrder(null);
     setI(0);
     setScore(0);
     setSelected(null);

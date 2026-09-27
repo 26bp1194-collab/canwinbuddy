@@ -80,6 +80,10 @@ export function usePlanningEnabled() {
 
 export type Difficulty = "easy" | "medium" | "hard";
 
+export const CURRICULA = ["SPM", "IGCSE", "A-Levels", "Gaokao", "AP", "SAT", "CBSE", "ICSE"] as const;
+export type Curriculum = "none" | (typeof CURRICULA)[number] | "other";
+export type CurriculumSetting = { curriculum: Curriculum; customCurriculum: string };
+
 export type StyleSpec = {
   mode: "simple" | "advanced";
   shortQA: boolean;
@@ -103,6 +107,8 @@ export const DEFAULT_SPEC_ADVANCED: StyleSpec = { ...DEFAULT_SPEC, mode: "advanc
 export type QuizDefaults = {
   count: number;
   difficulty: Difficulty;
+  curriculum: Curriculum;
+  customCurriculum: string;
   platform: "blooket" | "gimkit" | "gimkit2" | "kahoot";
   language: string;
   /** Defaults used while the Generate page is on Simple */
@@ -114,6 +120,8 @@ export type QuizDefaults = {
 export const DEFAULT_QUIZ_DEFAULTS: QuizDefaults = {
   count: 10,
   difficulty: "medium",
+  curriculum: "none",
+  customCurriculum: "",
   platform: "blooket",
   language: "English",
   spec: DEFAULT_SPEC,
@@ -169,6 +177,8 @@ export type GenerateDraft = {
   count: number;
   countText?: string;
   difficulty: Difficulty;
+  curriculum?: Curriculum;
+  customCurriculum?: string;
   spec?: StyleSpec;
   mode?: "simple" | "advanced";
   specs?: { simple: StyleSpec; advanced: StyleSpec };
@@ -182,7 +192,7 @@ export type GenerateDraft = {
 /** Stable signature of the current default quiz settings. */
 export function quizDefaultsSignature(): string {
   const d = getQuizDefaults();
-  return JSON.stringify([d.count, d.difficulty, d.spec, d.specAdvanced]);
+  return JSON.stringify([d.count, d.difficulty, d.curriculum, d.customCurriculum, d.spec, d.specAdvanced]);
 }
 
 
@@ -317,6 +327,8 @@ export function setSkipInfoWarningValue(value: SkipInfoWarning) {
 export type QuizSettingsSnapshot = {
   count: number;
   difficulty: Difficulty;
+  curriculum?: Curriculum;
+  customCurriculum?: string;
   mode: "simple" | "advanced";
   spec: StyleSpec;
   subjects?: import("./quiz-context").SubjectEntry[];

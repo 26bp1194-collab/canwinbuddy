@@ -246,6 +246,10 @@ function SettingsPage() {
             <DifficultyControls
               difficulty={form.defaults.difficulty}
               setDifficulty={(d) => patchDefaults({ difficulty: d })}
+              curriculum={form.defaults.curriculum}
+              setCurriculum={(v) => patchDefaults({ curriculum: v })}
+              customCurriculum={form.defaults.customCurriculum}
+              setCustomCurriculum={(v) => patchDefaults({ customCurriculum: v })}
               spec={editingSpec}
               setSpec={setEditingSpec}
               countText={String(form.defaults.count)}
