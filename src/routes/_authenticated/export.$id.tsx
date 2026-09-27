@@ -497,6 +497,7 @@ function SourcesDialog({
     ? [
         [t("Questions"), String(settings.count)],
         [t("Difficulty"), settings.difficulty],
+        [t("Curriculum"), settings.curriculum === "other" ? (settings.customCurriculum?.trim() || t("Other")) : settings.curriculum && settings.curriculum !== "none" ? settings.curriculum : t("None")],
         [t("Customisation"), settings.mode === "advanced" ? t("Advanced") : t("Simple")],
         ...(settings.mode === "advanced"
           ? ([

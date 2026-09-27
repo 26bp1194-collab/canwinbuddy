@@ -37,7 +37,6 @@ import {
   AGES,
   ageLabel,
   buildGuidance,
-  curriculumText,
   type AudienceEntry,
   type SubjectEntry,
 } from "@/lib/quiz-context";
@@ -848,12 +847,9 @@ export function DifficultyControls({
 
       {!advanced ? (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {countField}
             {difficultyField}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div />
             {curriculumField}
           </div>
           {customCurriculumField}
