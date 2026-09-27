@@ -64,7 +64,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
 
   useEffect(() => {
     try {
-      const raw = window.sessionStorage.getItem(sessionKey);
+      const raw = window.localStorage.getItem(sessionKey);
       if (raw) {
         const saved = JSON.parse(raw) as {
           signature: string; order: Question[]; i: number; selected: number | null;
@@ -76,7 +76,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
           setSelected(saved.selected);
           setScore(saved.score);
           setAnswers(saved.answers);
-        } else window.sessionStorage.removeItem(sessionKey);
+        } else window.localStorage.removeItem(sessionKey);
       }
     } catch { /* invalid or unavailable session storage */ }
     setReady(true);
@@ -85,7 +85,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   useEffect(() => {
     if (!ready || finished || !started) return;
     try {
-      window.sessionStorage.setItem(sessionKey, JSON.stringify({ signature: JSON.stringify(questions), order: shuffled, i, selected, score, answers }));
+      window.localStorage.setItem(sessionKey, JSON.stringify({ signature: JSON.stringify(questions), order: shuffled, i, selected, score, answers }));
     } catch { /* storage may be unavailable */ }
   }, [ready, finished, started, sessionKey, questions, shuffled, i, selected, score, answers]);
 
@@ -135,7 +135,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
     const rows = [...answers, row];
     setAnswers(rows);
     if (i + 1 >= shuffled.length) {
-      try { window.sessionStorage.removeItem(sessionKey); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(sessionKey); } catch { /* ignore */ }
       setFinished(true);
       void saveSession(rows, rows.filter((r) => r.correct).length);
     } else {
@@ -145,7 +145,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   };
 
   const replay = () => {
-    try { window.sessionStorage.removeItem(sessionKey); } catch { /* ignore */ }
+    try { window.localStorage.removeItem(sessionKey); } catch { /* ignore */ }
     setSavedOrder(null);
     setI(0);
     setScore(0);
