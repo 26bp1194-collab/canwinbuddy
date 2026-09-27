@@ -1,5 +1,11 @@
 /* Subject / audience ("For") context used to steer question generation. */
 
+import type { CurriculumSetting } from "./prefs";
+
+export function curriculumText(setting: CurriculumSetting): string {
+  return setting.curriculum === "other" ? setting.customCurriculum.trim() : setting.curriculum === "none" ? "" : setting.curriculum;
+}
+
 export const SUBJECTS = [
   "Art & Design",
   "Biology",
@@ -58,12 +64,15 @@ export function buildGuidance(
   subjects: SubjectEntry[],
   audiences: AudienceEntry[],
   instructions: string,
+  curriculum?: CurriculumSetting,
 ): string {
   const subs = subjects.map(subjectText).filter(Boolean);
   const auds = audiences.map(audienceText).filter(Boolean);
   const parts: string[] = [];
   if (subs.length) parts.push(`Subject(s): ${subs.join(", ")}`);
   if (auds.length) parts.push(`Written for: ${auds.join("; ")} — match vocabulary, reading level and expected prior knowledge to this level.`);
+  const curriculumName = curriculum ? curriculumText(curriculum) : "";
+  if (curriculumName) parts.push(`Curriculum: ${curriculumName} — align question framing and expected level, but use only facts present in the source.`);
   if (instructions.trim()) parts.push(`Extra instructions from the user: ${instructions.trim()}`);
   return parts.join("\n");
 }

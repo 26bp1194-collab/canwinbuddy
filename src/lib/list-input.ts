@@ -39,9 +39,22 @@ export function listKeyDown(
   e: React.KeyboardEvent<HTMLTextAreaElement>,
   onChange: (value: string) => void,
 ) {
-  if (e.key !== "Enter" || e.shiftKey) return;
   const el = e.currentTarget;
   if (el.selectionStart !== el.selectionEnd) return;
+  if (e.key === " " && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const start = el.value.lastIndexOf("\n", el.selectionStart - 1) + 1;
+    const line = el.value.slice(start, el.selectionStart);
+    const match = line.match(/^(\d+\.|-)$/);
+    if (match) {
+      e.preventDefault();
+      const replacement = `    ${match[1] === "-" ? "•" : match[1]} `;
+      const value = el.value.slice(0, start) + replacement + el.value.slice(el.selectionStart);
+      onChange(value);
+      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + replacement.length; });
+    }
+    return;
+  }
+  if (e.key !== "Enter" || e.shiftKey) return;
   const result = continueList(el.value, el.selectionStart);
   if (!result) return;
   e.preventDefault();

@@ -47,6 +47,8 @@ const SELF_CONTAINED = `SELF-CONTAINED CONTEXT (critical):
 - If a term only makes sense with a definition, include the short defining phrase in the stem.
 - Where an example helps, write a short example in the same style as the notes — a few short notes only, never long extra material.`;
 
+const TERM_CONSISTENCY = `TERM CONSISTENCY (critical): When the source defines a specific named concept, term, or device (for example, "Ethos", "Tricolon", or "Repetition"), use the exact singular form and spelling as it first appears in the source. Never pluralize, abbreviate, or vary it in any question or answer option in this set. Apply this consistently across all questions.`;
+
 const guidanceBlock = (g?: string | null) =>
   g && g.trim()
     ? `\n\nUSER BRIEF (subject areas, target learner level/age, and extra instructions). Follow these when choosing wording, vocabulary and framing. Facts must still come ONLY from the source:\n${g.trim().slice(0, 2000)}`
@@ -238,7 +240,8 @@ STYLE:
 - NO NEAR-DUPLICATES: never test the same fact twice. Two questions with the same correct answer, or that reword the same sentence of the notes, are forbidden — even if the wording, the options or the order differ. Each question must target a different fact, relationship or detail.
 - Do not repeat or lightly rephrase questions already accepted.
 
-${SELF_CONTAINED}
+ ${SELF_CONTAINED}
+ ${TERM_CONSISTENCY}
 ${MATH_RULES}${styleBlock(spec)}${guidanceBlock(guidance)}${topics}${facts}${sums}`;
 }
 
@@ -326,8 +329,9 @@ Check each question, in this order:
 2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
 3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
-5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
-Each issue is one short, actionable sentence.${styleBlock(spec)}${guidanceBlock(guidance)}`;
+ 5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
+ 6. TERM CONSISTENCY: compare the entire set with the source. If the source defines a named concept, term or device, fail every question or answer option that pluralizes, abbreviates, respells or otherwise varies its first-appearing exact singular form. Include the exact source term in each issue so the replacement can correct it. Check consistency across different questions and options, not just within one question.
+ Each issue is one short, actionable sentence. ${TERM_CONSISTENCY}${styleBlock(spec)}${guidanceBlock(guidance)}`;
 
 
 async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
