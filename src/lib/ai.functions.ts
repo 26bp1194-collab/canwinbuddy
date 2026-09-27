@@ -162,6 +162,7 @@ const AnalysisSchema = z.object({
   topics: z.array(z.string()).min(1),
   keyFacts: z.array(z.string()),
   summaries: z.array(z.string()).default([]),
+  namedTerms: z.array(z.string()).default([]),
   coverageNotes: z.string(),
   maxQuestions: z.number().int().min(0).max(300).default(0),
 });
@@ -174,11 +175,12 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
-- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"coverageNotes":string,"maxQuestions":number}
+ - Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"namedTerms":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
 - "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
 - "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
+ - "namedTerms": up to 30 specifically defined named concepts, terms or devices copied with the exact singular spelling and capitalisation from their FIRST occurrence in the notes. Do not invent or pluralise names.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
 - "maxQuestions": how many GENUINELY DIFFERENT multiple-choice questions these notes can support. Count one question per distinct testable fact only. Two questions that test the same fact with different wording count as ONE. Be honest and conservative — a short set of notes usually supports far fewer than 20.
 - Use ONLY the provided notes. Never add outside knowledge.
@@ -194,11 +196,12 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
         topics: parsed.topics.slice(0, 12),
         keyFacts: parsed.keyFacts.slice(0, 20),
         summaries: (parsed.summaries ?? []).slice(0, 12),
+        namedTerms: (parsed.namedTerms ?? []).slice(0, 30),
         coverageNotes: parsed.coverageNotes,
         maxQuestions: parsed.maxQuestions ?? 0,
       } satisfies Analysis;
     } catch {
-      return { topics: [], keyFacts: [], summaries: [], coverageNotes: "", maxQuestions: 0 } as Analysis;
+       return { topics: [], keyFacts: [], summaries: [], namedTerms: [], coverageNotes: "", maxQuestions: 0 } as Analysis;
     }
   });
 
@@ -214,6 +217,9 @@ function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: 
     : "";
   const sums = analysis?.summaries?.length
     ? `\n\nSECTION SUMMARIES OF THE NOTES (use alongside the full source text):\n${analysis.summaries.map((s) => `- ${s}`).join("\n")}`
+    : "";
+  const terms = analysis?.namedTerms?.length
+    ? `\n\nEXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms):\n${analysis.namedTerms.map((term) => `- ${term}`).join("\n")}`
     : "";
 
   return `You generate multiple-choice quiz questions from provided source material. Rules:
@@ -242,7 +248,7 @@ STYLE:
 
  ${SELF_CONTAINED}
  ${TERM_CONSISTENCY}
-${MATH_RULES}${styleBlock(spec)}${guidanceBlock(guidance)}${topics}${facts}${sums}`;
+ ${MATH_RULES}${styleBlock(spec)}${guidanceBlock(guidance)}${topics}${facts}${sums}${terms}`;
 }
 
 const GenerateInput = InputSchema.extend({
@@ -321,7 +327,7 @@ const ReviewSchema = z.object({
   ),
 });
 
-const REVIEW_SYSTEM = (difficulty: string, spec?: Partial<StyleSpec> | null, guidance?: string | null) => `You are a strict quiz quality reviewer.
+const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
 Check each question, in this order:
@@ -331,15 +337,15 @@ Check each question, in this order:
 4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
  5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
  6. TERM CONSISTENCY: compare the entire set with the source. If the source defines a named concept, term or device, fail every question or answer option that pluralizes, abbreviates, respells or otherwise varies its first-appearing exact singular form. Include the exact source term in each issue so the replacement can correct it. Check consistency across different questions and options, not just within one question.
- Each issue is one short, actionable sentence. ${TERM_CONSISTENCY}${styleBlock(spec)}${guidanceBlock(guidance)}`;
+ Each issue is one short, actionable sentence. ${TERM_CONSISTENCY}${analysis?.namedTerms?.length ? `\nEXACT FIRST-OCCURRENCE SOURCE TERMS:\n${analysis.namedTerms.join("\n")}` : ""}${styleBlock(spec)}${guidanceBlock(guidance)}`;
 
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
   const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
     questions.map((q, index) => ({ index, ...q })),
   )}`;
   const raw = await callAI([
-    { role: "system", content: REVIEW_SYSTEM(difficulty, spec, guidance) },
+    { role: "system", content: REVIEW_SYSTEM(difficulty, analysis, spec, guidance) },
     { role: "user", content: user },
   ]);
   try {
@@ -426,7 +432,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
 
     for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
       rounds = round + 1;
-      const reviews = await reviewBatch(sourceText, current, difficulty, spec, guidance);
+      const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance);
       const verdict = new Map(reviews.map((r) => [r.index, r]));
 
       const failing: Array<{ index: number; issues: string[] }> = [];
