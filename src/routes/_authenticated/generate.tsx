@@ -42,6 +42,8 @@ import {
 } from "@/lib/quiz-context";
 
 import { AiTextHelper } from "@/components/ai-text-helper";
+import { WorksheetDialog } from "@/components/worksheet-dialog";
+import { subjectText as wsSubjectText, curriculumText as wsCurriculumText } from "@/lib/quiz-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -95,6 +97,7 @@ function GeneratePage() {
   const [subjects, setSubjects] = useState<SubjectEntry[]>([{ value: "No subject", custom: "" }]);
   const [audiences, setAudiences] = useState<AudienceEntry[]>([{ kind: "all" }]);
   const [instructions, setInstructions] = useState("");
+  const [worksheetOpen, setWorksheetOpen] = useState(false);
 
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
@@ -397,6 +400,20 @@ function GeneratePage() {
         {stage === "input" && generateStep === "notes" ? (
           <motion.div key="notes" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
+                </Button>
+              </div>
+              <WorksheetDialog
+                open={worksheetOpen}
+                onOpenChange={setWorksheetOpen}
+                sourceText={source}
+                title={title}
+                initialSubject={subjects.map(subjectText).find(Boolean)}
+                initialAge={audiences.find((a) => a.kind === "single")?.kind === "single" ? (audiences.find((a) => a.kind === "single") as { age: number }).age : undefined}
+                initialCurriculum={curriculumText({ curriculum, customCurriculum }) || undefined}
+              />
               <div>
                 <Label htmlFor="title" className="mb-2 block">
                   {t("Title")} <span className="text-muted-foreground">({t("optional")})</span>
