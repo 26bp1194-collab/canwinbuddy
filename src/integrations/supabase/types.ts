@@ -231,6 +231,54 @@ export type Database = {
           },
         ]
       }
+      worksheets: {
+        Row: {
+          age: number
+          answer_key: Json
+          content: Json
+          created_at: string
+          curriculum: string
+          id: string
+          is_favorite: boolean
+          source_text: string
+          subject: string
+          title: string
+          topics: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          age?: number
+          answer_key?: Json
+          content?: Json
+          created_at?: string
+          curriculum?: string
+          id?: string
+          is_favorite?: boolean
+          source_text?: string
+          subject?: string
+          title: string
+          topics?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          age?: number
+          answer_key?: Json
+          content?: Json
+          created_at?: string
+          curriculum?: string
+          id?: string
+          is_favorite?: boolean
+          source_text?: string
+          subject?: string
+          title?: string
+          topics?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight, Star, Pencil, Play, Plus } from "lucide-react";
+import { Trash2, FileQuestion, MoreVertical, FolderPlus, Folder, ChevronRight, Star, Pencil, Play, Plus, FileText } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -54,7 +54,8 @@ export const Route = createFileRoute("/_authenticated/history")({
 type Row = { id: string; title: string; question_count: number; created_at: string; is_favorite: boolean };
 
 type SortKey = "default" | "newest" | "oldest" | "az" | "za" | "most" | "least";
-type CategoryKey = "all" | "groups" | "quizzes" | "favourites";
+type CategoryKey = "all" | "groups" | "quizzes" | "worksheets" | "favourites";
+type WsRow = { id: string; title: string; subject: string; curriculum: string; age: number; created_at: string; is_favorite: boolean };
 
 function HistoryPage() {
   const t = useT();
@@ -95,6 +96,30 @@ function HistoryPage() {
   });
 
 
+  const { data: worksheets } = useQuery({
+    queryKey: ["worksheets", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("worksheets").select("id,title,subject,curriculum,age,created_at,is_favorite").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as WsRow[];
+    },
+  });
+  const wsFav = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("worksheets").update({ is_favorite: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["worksheets"] }),
+  });
+  const wsDel = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("worksheets").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["worksheets"] }); toast.success(t("Worksheet deleted")); },
+  });
+  const [wsRename, setWsRename] = useState<{ id: string; name: string } | null>(null);
   const { data: groups } = useQuery({
     queryKey: ["groups", user?.id],
     enabled: !!user,
@@ -282,6 +307,11 @@ function HistoryPage() {
     (r) => ({ name: r.title, created_at: r.created_at, is_favorite: r.is_favorite, count: r.question_count }),
   );
 
+  const visibleWorksheets = category === "groups" || category === "quizzes" ? [] : applySort(
+    (worksheets ?? []).filter((w) => (category === "favourites" ? w.is_favorite : true)),
+    (w) => ({ name: w.title, created_at: w.created_at, is_favorite: w.is_favorite, count: 0 }),
+  );
+
   const sortOptions: { value: SortKey; label: string }[] = [
     { value: "default", label: t("Default") },
     { value: "newest", label: t("Newest") },
@@ -296,6 +326,7 @@ function HistoryPage() {
     { value: "all", label: t("All") },
     { value: "groups", label: t("Groups") },
     { value: "quizzes", label: t("Quizzes") },
+    { value: "worksheets", label: t("Worksheets") },
     { value: "favourites", label: t("Favourited") },
   ];
 
@@ -414,10 +445,68 @@ function HistoryPage() {
       )}
 
 
+      {visibleWorksheets.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-success"><FileText className="h-4 w-4" /> {t("Worksheets")}</h2>
+          <ul className="space-y-3">
+            {visibleWorksheets.map((w) => (
+              <motion.li key={w.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -2 }} className="panel border-l-4 border-l-success bg-success/5">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 p-2 pl-3 sm:p-4">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-success/15 text-success"><FileText className="h-4 w-4" /></span>
+                  <Link to="/worksheet/$id" params={{ id: w.id }} className="min-w-0 py-2">
+                    <p className="flex items-center gap-2 truncate font-medium">{w.title} <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-success">{t("Worksheet")}</span></p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{w.curriculum} · {w.subject} · {t("Age")} {w.age} · {formatDistanceToNow(new Date(w.created_at), { addSuffix: true })}</p>
+                  </Link>
+                  <Button variant="ghost" size="icon" aria-label={t("Favourite worksheet")} onClick={() => wsFav.mutate({ id: w.id, value: !w.is_favorite })}>
+                    <Star className={w.is_favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4 text-muted-foreground"} />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={`Options for ${w.title}`}><MoreVertical className="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setWsRename({ id: w.id, name: w.title })}><Pencil className="mr-2 h-4 w-4" /> {t("Rename")}</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onSelect={(e) => {
+                          if (quick.quiz || confirmId === w.id) { setConfirmId(null); return void wsDel.mutate(w.id); }
+                          e.preventDefault();
+                          setConfirmId(w.id);
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> {confirmId === w.id && !quick.quiz ? t("Are you sure?") : t("Delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </motion.li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <Dialog open={!!wsRename} onOpenChange={(v) => !v && setWsRename(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("Rename worksheet")}</DialogTitle></DialogHeader>
+          <Input value={wsRename?.name ?? ""} onChange={(e) => setWsRename((r) => (r ? { ...r, name: e.target.value } : r))} />
+          <DialogFooter>
+            <Button
+              onClick={async () => {
+                if (!wsRename?.name.trim()) return;
+                const { error } = await supabase.from("worksheets").update({ title: wsRename.name.trim() }).eq("id", wsRename.id);
+                if (error) return void toast.error(error.message);
+                qc.invalidateQueries({ queryKey: ["worksheets"] });
+                setWsRename(null);
+              }}
+            >{t("Save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="mt-8">
         {isLoading ? (
           <div className="panel p-8 text-center text-muted-foreground">{t("Loading…")}</div>
-        ) : !visibleQuizzes.length ? (
+        ) : category === "worksheets" ? (visibleWorksheets.length ? null : <div className="panel p-12 text-center text-muted-foreground">{t("No worksheets yet")}</div>) : !visibleQuizzes.length ? (
           <div className="panel p-12 text-center">
             <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 font-medium">
