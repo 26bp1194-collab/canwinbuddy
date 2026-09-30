@@ -22,6 +22,7 @@ import { Route as PlayIdRouteImport } from './routes/play.$id'
 import { Route as AuthenticatedExportIdRouteImport } from './routes/_authenticated/export.$id'
 import { Route as AuthenticatedGroupIdRouteImport } from './routes/_authenticated/group.$id'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedWorksheetIdRouteImport } from './routes/_authenticated/worksheet.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -87,6 +88,12 @@ const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedHistoryRoute,
 } as any)
+const AuthenticatedWorksheetIdRoute =
+  AuthenticatedWorksheetIdRouteImport.update({
+    id: '/worksheet/$id',
+    path: '/worksheet/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/export/$id': typeof AuthenticatedExportIdRoute
   '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,6 +123,7 @@ export interface FileRoutesByTo {
   '/export/$id': typeof AuthenticatedExportIdRoute
   '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,6 +140,7 @@ export interface FileRoutesById {
   '/_authenticated/export/$id': typeof AuthenticatedExportIdRoute
   '/_authenticated/group/$id': typeof AuthenticatedGroupIdRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/_authenticated/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/export/$id'
     | '/group/$id'
     | '/history/$id'
+    | '/worksheet/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/export/$id'
     | '/group/$id'
     | '/history/$id'
+    | '/worksheet/$id'
   id:
     | '__root__'
     | '/'
@@ -176,6 +188,7 @@ export interface FileRouteTypes {
     | '/_authenticated/export/$id'
     | '/_authenticated/group/$id'
     | '/_authenticated/history/$id'
+    | '/_authenticated/worksheet/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -279,6 +292,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
     }
+    '/_authenticated/worksheet/$id': {
+      id: '/_authenticated/worksheet/$id'
+      path: '/worksheet/$id'
+      fullPath: '/worksheet/$id'
+      preLoaderRoute: typeof AuthenticatedWorksheetIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -301,6 +321,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedExportIdRoute: typeof AuthenticatedExportIdRoute
   AuthenticatedGroupIdRoute: typeof AuthenticatedGroupIdRoute
+  AuthenticatedWorksheetIdRoute: typeof AuthenticatedWorksheetIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -311,6 +332,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedExportIdRoute: AuthenticatedExportIdRoute,
   AuthenticatedGroupIdRoute: AuthenticatedGroupIdRoute,
+  AuthenticatedWorksheetIdRoute: AuthenticatedWorksheetIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
