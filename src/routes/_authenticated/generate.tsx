@@ -410,9 +410,9 @@ function GeneratePage() {
                 onOpenChange={setWorksheetOpen}
                 sourceText={source}
                 title={title}
-                initialSubject={subjects.map(subjectText).find(Boolean)}
+                initialSubject={subjects.map(wsSubjectText).find(Boolean)}
                 initialAge={audiences.find((a) => a.kind === "single")?.kind === "single" ? (audiences.find((a) => a.kind === "single") as { age: number }).age : undefined}
-                initialCurriculum={curriculumText({ curriculum, customCurriculum }) || undefined}
+                initialCurriculum={wsCurriculumText({ curriculum, customCurriculum }) || undefined}
               />
               <div>
                 <Label htmlFor="title" className="mb-2 block">
