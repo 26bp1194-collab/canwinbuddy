@@ -12,6 +12,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   clearDraft,
+  clearHelperState,
   formatMs,
   getDraft,
   getQuizDefaults,
@@ -139,6 +140,21 @@ function GeneratePage() {
       advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
     });
 
+    /* Restore in-progress settings too, so leaving the page never loses anything */
+    if (draft && !prefill) {
+      if (draft.countText !== undefined) setCountText(draft.countText);
+      else if (draft.count) setCountText(String(draft.count));
+      if (draft.difficulty) setDifficulty(draft.difficulty);
+      if (draft.curriculum) setCurriculum(draft.curriculum);
+      if (draft.customCurriculum !== undefined) setCustomCurriculum(draft.customCurriculum);
+      if (draft.mode) setMode(draft.mode);
+      if (draft.specs) setSpecs(draft.specs);
+      if (draft.step === "customisation") {
+        setGenerateStep("customisation");
+        setCustomisationVisited(true);
+      }
+    }
+
     /* "Use all" from an existing quiz — reuse its sources and every setting */
     if (prefill) {
       setSource(prefill.source);
@@ -191,12 +207,12 @@ function GeneratePage() {
       !instructions.trim() &&
       subjects.length === 1 && subjects[0].value === "No subject" &&
       audiences.length === 1 && audiences[0].kind === "all";
-    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault) {
+    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, defaultsSig: quizDefaultsSignature() });
-  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions]);
+    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
+  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
 
 
   const resetSettings = () => {
@@ -280,6 +296,7 @@ function GeneratePage() {
       finished.current = true;
       pending.current = null;
       clearDraft();
+      clearHelperState();
 
       if (questions.length < useCount) {
         toast.success(`${t("Generated")} ${questions.length}/${useCount} — ${formatMs(total)}`);
@@ -400,11 +417,6 @@ function GeneratePage() {
         {stage === "input" && generateStep === "notes" ? (
           <motion.div key="notes" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
-                </Button>
-              </div>
               <WorksheetDialog
                 open={worksheetOpen}
                 onOpenChange={setWorksheetOpen}
@@ -491,7 +503,10 @@ function GeneratePage() {
                   </ul>
                 )}
               </div>
-              <div className="flex justify-end border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
+                </Button>
                 <Button type="button" size="sm" onClick={() => { setCustomisationVisited(true); setGenerateStep("customisation"); }} className="min-w-24">
                   {t("Next")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -798,9 +813,9 @@ export function DifficultyControls({
       <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
         <SelectTrigger><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="easy">{t("Easy")}</SelectItem>
-          <SelectItem value="medium">{t("Medium")}</SelectItem>
-          <SelectItem value="hard">{t("Hard")}</SelectItem>
+          <SelectItem value="easy">{t("Simple")}</SelectItem>
+          <SelectItem value="medium">{t("Average")}</SelectItem>
+          <SelectItem value="hard">{t("Difficult")}</SelectItem>
         </SelectContent>
       </Select>
     </div>

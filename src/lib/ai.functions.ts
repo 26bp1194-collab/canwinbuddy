@@ -194,7 +194,7 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
       const parsed = AnalysisSchema.parse(JSON.parse(raw));
       return {
         topics: parsed.topics.slice(0, 12),
-        keyFacts: parsed.keyFacts.slice(0, 20),
+        keyFacts: parsed.keyFacts.slice(0, 60),
         summaries: (parsed.summaries ?? []).slice(0, 12),
         namedTerms: (parsed.namedTerms ?? []).slice(0, 30),
         coverageNotes: parsed.coverageNotes,
@@ -412,7 +412,7 @@ const ReviewInput = z.object({
 });
 
 const MAX_REVIEW_ROUNDS = 5;
-const GLOBAL_REGEN_CAP = 60;
+const GLOBAL_REGEN_CAP = 150;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -766,7 +766,7 @@ const FeedbackInput = z.object({
   title: z.string().max(200),
   score: z.number().int().min(0),
   total: z.number().int().min(1),
-  missed: z.array(z.object({ question: z.string(), correct: z.string() })).max(30).optional().default([]),
+  missed: z.array(z.object({ question: z.string(), correct: z.string() })).max(100).optional().default([]),
 });
 
 export const quizFeedback = createServerFn({ method: "POST" })
