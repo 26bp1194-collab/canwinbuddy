@@ -798,9 +798,9 @@ export function DifficultyControls({
       <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
         <SelectTrigger><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="easy">{t("Easy")}</SelectItem>
-          <SelectItem value="medium">{t("Medium")}</SelectItem>
-          <SelectItem value="hard">{t("Hard")}</SelectItem>
+          <SelectItem value="easy">{t("Simple")}</SelectItem>
+          <SelectItem value="medium">{t("Average")}</SelectItem>
+          <SelectItem value="hard">{t("Difficult")}</SelectItem>
         </SelectContent>
       </Select>
     </div>
