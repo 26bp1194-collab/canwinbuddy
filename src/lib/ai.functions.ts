@@ -267,27 +267,38 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxAttempts = Math.ceil(count / batch) + 8;
+    const maxAttempts = Math.ceil(count / batch) * 2 + 8;
     let attempts = 0;
+    let emptyStreak = 0;
 
     while (validated.length < count && attempts < maxAttempts) {
       attempts++;
       const need = Math.min(count - validated.length, batch);
 
-      const avoid = validated.slice(-25).map((q) => q.question);
+      const avoid = validated.map((q) => q.question);
       const userPrompt = `Generate ${need} quiz questions from this source. Return valid JSON only.${
         analysis?.topics?.length ? `\n\nAllocate the ${need} questions across the analysed topics as evenly as possible.` : ""
       }${
         avoid.length ? `\n\nDo NOT repeat or rephrase any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
-      const raw = await callAI([
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ]);
+      let raw: string;
+      try {
+        raw = await callAI([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ]);
+      } catch (e) {
+        if (validated.length === 0) throw e;
+        emptyStreak++;
+        if (emptyStreak >= 5) break;
+        continue;
+      }
       let parsed: { questions: unknown[] };
       try {
         parsed = JSON.parse(raw);
       } catch {
+        emptyStreak++;
+        if (emptyStreak >= 5) break;
         continue;
       }
       let addedThisRound = 0;
@@ -304,8 +315,10 @@ export const generateQuestions = createServerFn({ method: "POST" })
         addedThisRound++;
         if (validated.length >= count) break;
       }
-      // Source exhausted — stop burning attempts.
-      if (addedThisRound === 0 && attempts >= 3) break;
+      // Source exhausted — stop only after several rejected rounds IN A ROW
+      // (a single rejected question must not end the whole run).
+      emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
+      if (emptyStreak >= 5) break;
     }
 
     if (validated.length === 0) {

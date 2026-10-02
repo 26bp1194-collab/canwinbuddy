@@ -294,6 +294,12 @@ function GeneratePage() {
       saveTimings(inserted.id, steps, total);
       setStage("done");
       finished.current = true;
+      if (questions.length < useCount) {
+        toast.warning(
+          `${t("Only")} ${questions.length} / ${useCount} ${t("questions were made")}. ${t("The notes didn't contain enough distinct, verifiable facts for more without repeating questions.")}`,
+          { duration: 10000 },
+        );
+      }
       pending.current = null;
       clearDraft();
       clearHelperState();
