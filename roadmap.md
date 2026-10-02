@@ -1,5 +1,6 @@
 # Current tasks
-- [x] Format numbered and bulleted lists when a space is typed in the Generate source editor.
-- [x] Preserve an answered quiz session across closing and returning, until reset or completion.
-- [x] Enforce source-defined term consistency in question generation and review.
-- [x] Add curriculum selection and custom curriculum to Generate and quiz defaults.
+- [x] Clear AI Text Helper inputs/output once a quiz is generated.
+- [x] Move Create Worksheet to bottom-left beside Next.
+- [x] Support up to 100 questions everywhere.
+- [x] Keep full Generate page state (text, settings, step) until a quiz is generated or tab closes.
+- [x] Rename difficulty labels to Simple/Average/Difficult; confirm system defaults.

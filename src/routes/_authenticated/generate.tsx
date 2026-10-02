@@ -417,11 +417,6 @@ function GeneratePage() {
         {stage === "input" && generateStep === "notes" ? (
           <motion.div key="notes" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} className="mt-6 space-y-5 sm:mt-8">
             <div className="panel space-y-5 p-4 sm:p-6">
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
-                </Button>
-              </div>
               <WorksheetDialog
                 open={worksheetOpen}
                 onOpenChange={setWorksheetOpen}
@@ -508,7 +503,10 @@ function GeneratePage() {
                   </ul>
                 )}
               </div>
-              <div className="flex justify-end border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
+                </Button>
                 <Button type="button" size="sm" onClick={() => { setCustomisationVisited(true); setGenerateStep("customisation"); }} className="min-w-24">
                   {t("Next")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
