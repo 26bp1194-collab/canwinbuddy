@@ -207,7 +207,7 @@ function GeneratePage() {
       !instructions.trim() &&
       subjects.length === 1 && subjects[0].value === "No subject" &&
       audiences.length === 1 && audiences[0].kind === "all";
-    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault) {
+    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
       clearDraft();
       return;
     }
