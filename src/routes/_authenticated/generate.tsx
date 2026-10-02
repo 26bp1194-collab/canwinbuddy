@@ -12,6 +12,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   clearDraft,
+  clearHelperState,
   formatMs,
   getDraft,
   getQuizDefaults,
@@ -280,6 +281,7 @@ function GeneratePage() {
       finished.current = true;
       pending.current = null;
       clearDraft();
+      clearHelperState();
 
       if (questions.length < useCount) {
         toast.success(`${t("Generated")} ${questions.length}/${useCount} — ${formatMs(total)}`);

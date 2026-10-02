@@ -496,7 +496,7 @@ function SourcesDialog({
   const rows: Array<[string, string]> = settings
     ? [
         [t("Questions"), String(settings.count)],
-        [t("Difficulty"), settings.difficulty],
+        [t("Difficulty"), t(({ easy: "Simple", medium: "Average", hard: "Difficult" } as Record<string, string>)[settings.difficulty] ?? settings.difficulty)],
         [t("Curriculum"), settings.curriculum === "other" ? (settings.customCurriculum?.trim() || t("Other")) : settings.curriculum && settings.curriculum !== "none" ? settings.curriculum : t("None")],
         [t("Customisation"), settings.mode === "advanced" ? t("Advanced") : t("Simple")],
         ...(settings.mode === "advanced"
