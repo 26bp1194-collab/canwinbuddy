@@ -140,6 +140,21 @@ function GeneratePage() {
       advanced: { ...DEFAULT_SPEC_ADVANCED, ...defaults.specAdvanced, mode: "advanced" },
     });
 
+    /* Restore in-progress settings too, so leaving the page never loses anything */
+    if (draft && !prefill) {
+      if (draft.countText !== undefined) setCountText(draft.countText);
+      else if (draft.count) setCountText(String(draft.count));
+      if (draft.difficulty) setDifficulty(draft.difficulty);
+      if (draft.curriculum) setCurriculum(draft.curriculum);
+      if (draft.customCurriculum !== undefined) setCustomCurriculum(draft.customCurriculum);
+      if (draft.mode) setMode(draft.mode);
+      if (draft.specs) setSpecs(draft.specs);
+      if (draft.step === "customisation") {
+        setGenerateStep("customisation");
+        setCustomisationVisited(true);
+      }
+    }
+
     /* "Use all" from an existing quiz — reuse its sources and every setting */
     if (prefill) {
       setSource(prefill.source);
@@ -196,8 +211,8 @@ function GeneratePage() {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, defaultsSig: quizDefaultsSignature() });
-  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions]);
+    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
+  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
 
 
   const resetSettings = () => {

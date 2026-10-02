@@ -185,6 +185,7 @@ export type GenerateDraft = {
   subjects?: import("./quiz-context").SubjectEntry[];
   audiences?: import("./quiz-context").AudienceEntry[];
   instructions?: string;
+  step?: "notes" | "customisation";
   /** Signature of the user's quiz defaults when the draft was saved. */
   defaultsSig?: string;
 };
