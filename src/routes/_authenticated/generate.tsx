@@ -38,6 +38,7 @@ import {
   AGES,
   ageLabel,
   buildGuidance,
+  curriculumText,
   type AudienceEntry,
   type SubjectEntry,
 } from "@/lib/quiz-context";
@@ -254,18 +255,19 @@ function GeneratePage() {
   const finishRun = async (combined: string, analysis: Analysis, useCount: number, started: number, steps: StepTiming[]) => {
     const mark = makeMark(started, steps);
     const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
+    const curriculumName = curriculumText({ curriculum, customCurriculum });
     try {
       setStage("generating");
       const t1 = performance.now();
       const generated = await generateQuestions({
-        data: { sourceText: combined, count: useCount, difficulty, spec, analysis, guidance },
+        data: { sourceText: combined, count: useCount, difficulty, spec, analysis, guidance, curriculum: curriculumName },
       });
       mark("Generating quiz", t1);
 
       setStage("reviewing");
       const t2 = performance.now();
       const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance },
+        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance, curriculum: curriculumName },
       });
       mark("Reviewing quiz", t2);
 
@@ -350,7 +352,7 @@ function GeneratePage() {
       setStage("analyzing");
       const t0a = performance.now();
        const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
-      analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance } });
+      analysis = await analyzeSource({ data: { sourceText: combined, count, difficulty, guidance, curriculum: curriculumText({ curriculum, customCurriculum }) } });
       mark("Analyzing notes", t0a);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("Generation failed"));
@@ -591,7 +593,7 @@ function GeneratePage() {
                       className="w-20 shrink-0"
                     />
                     <Button onClick={continueWithFewer} className="min-w-0 flex-1">
-                      <span className="truncate">{t("Continue with less questions")}</span>
+                      <span className="truncate">{t("Continue with fewer questions")}</span>
                     </Button>
                   </div>
                 </div>
