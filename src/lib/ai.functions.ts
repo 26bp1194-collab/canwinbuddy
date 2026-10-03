@@ -56,6 +56,7 @@ const guidanceBlock = (g?: string | null) =>
 
 const InputSchema = z.object({
   guidance: z.string().max(2000).optional(),
+  curriculum: z.string().max(120).optional(),
   sourceText: z.string().min(20),
   count: z.number().int().min(1).max(100),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
@@ -96,14 +97,16 @@ function normalize(s: string) {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\p{L}\p{N} ]/gu, "").trim();
 }
 
+/* Checks the supporting quote (fact, formula, example or data) is from the notes.
+   The final answer itself need not appear — derived answers are verified by the reviewer. */
 function validateQuestion(q: Question, sourceNorm: string): boolean {
   const quote = normalize(q.sourceQuote);
-  if (quote.length < 8) return false;
+  if (quote.length < 6) return false;
   if (sourceNorm.includes(quote)) return true;
-  // fall back: check that a run of >=6 words from the quote appears in the source
   const words = quote.split(" ").filter(Boolean);
-  for (let i = 0; i + 6 <= words.length; i++) {
-    const chunk = words.slice(i, i + 6).join(" ");
+  const run = words.length < 8 ? 3 : 5;
+  for (let i = 0; i + run <= words.length; i++) {
+    const chunk = words.slice(i, i + run).join(" ");
     if (sourceNorm.includes(chunk)) return true;
   }
   return false;
@@ -149,10 +152,83 @@ function batchSize(count: number) {
   return 4;
 }
 
+/* ---------------- Level / curriculum settings (sent first, every call) ---------------- */
+
+const CURRICULUM_GUIDES: Record<string, string> = {
+  IGCSE: `Cambridge/Edexcel IGCSE exam style. Begin stems with IGCSE command words where natural: State, Name, Describe, Explain, Calculate, Suggest, Complete (the equation), Determine, Deduce, Predict. Use correct scientific terminology and SI units, and phrase questions the way IGCSE papers do.`,
+  SPM: `Malaysian SPM exam style: clear Bahasa-paper-style phrasing translated to the chosen language, command words State, Explain, Calculate, Describe, Compare; KBAT-style application questions at higher levels.`,
+  "A-Levels": `A-Level exam style: precise terminology, command words Explain, Calculate, Deduce, Evaluate, Suggest; more quantitative and multi-step than GCSE.`,
+  Gaokao: `Gaokao style: rigorous, concise, calculation- and reasoning-heavy stems with precise terminology.`,
+  AP: `College Board AP style: stimulus-based stems (short scenario, data or experiment) followed by a question requiring application or analysis.`,
+  SAT: `SAT style: concise, evidence-based stems; quantitative questions framed as short real-world problems.`,
+  CBSE: `CBSE (India) style: NCERT-aligned phrasing, command words State, Define, Explain, Calculate, Give reason; competency-based questions at higher levels.`,
+  ICSE: `ICSE (India) style: precise definitions, Give reasons / State / Calculate / Explain phrasing, numerical problems with units.`,
+};
+
+function levelBlock(difficulty: string, spec?: Partial<StyleSpec> | null, curriculum?: string | null) {
+  const parts: string[] = ["LEVEL & STYLE SETTINGS (highest priority — every question must clearly reflect these):"];
+  if (spec?.mode === "advanced") {
+    const s = { questionLength: 3, answerLength: 3, complexity: 3, obscurity: 3, ...spec };
+    parts.push(
+      `- Question length ${s.questionLength}/5: ${["under 10 words", "10-15 words", "15-25 words", "25-35 words", "35-45 words, with a short scenario or data"][s.questionLength - 1]}.`,
+      `- Answer length ${s.answerLength}/5: ${["1-3 words", "2-5 words", "a short phrase (4-8 words)", "a clause (8-14 words)", "a full sentence (14-25 words)"][s.answerLength - 1]} per option.`,
+      `- Complexity ${s.complexity}/5: ${[
+        "single-step recall of one fact",
+        "recall plus one simple step (identify, classify)",
+        "application: use a fact, rule or formula in a given situation",
+        "two-step reasoning: combine two ideas or do a two-step calculation",
+        "multi-step reasoning: combine several ideas, multi-step calculations, cause→effect chains. Plain recall is FORBIDDEN",
+      ][s.complexity - 1]}.`,
+      `- Obscurity ${s.obscurity}/5: ${[
+        "the answer is stated word-for-word in the notes",
+        "the answer is stated in the notes but reworded",
+        "the answer must be put together from two places in the notes",
+        "the answer must be inferred or derived (applied to a new example) from the notes",
+        "the answer must be inferred/derived in an unfamiliar context; never copy a sentence from the notes as the answer",
+      ][s.obscurity - 1]}.`,
+    );
+  } else {
+    parts.push(
+      `- Difficulty ${difficulty}: ${
+        difficulty === "easy"
+          ? "direct recall of a clearly stated fact, definition or term."
+          : difficulty === "medium"
+            ? "about half recall, half application (use a fact/formula in a new example, compare, explain why). Pure recall must NOT exceed half the set."
+            : "multi-step reasoning: multi-step calculations, cause→effect, predicting outcomes, applying ideas to unfamiliar situations. Plain recall is FORBIDDEN."
+      }`,
+    );
+    if (spec?.shortQA) parts.push("- Short Q&A: stems under 15 words, options under 6 words.");
+  }
+  const c = curriculum?.trim();
+  if (c) {
+    parts.push(`- Curriculum ${c}: ${CURRICULUM_GUIDES[c] ?? `follow the real exam style, command words and terminology of ${c}.`} Match the level of this curriculum; facts still come only from the notes.`);
+  }
+  return parts.join("\n");
+}
+
+const REFERS_TO_SOURCE = /\b(according to|as stated in|as described in|as mentioned in|based on) (the )?(text|source|notes?|passage|definition|article|reading|diagram)\b/i;
+
+function openerOf(q: string) {
+  return normalize(q).split(" ").slice(0, 2).join(" ");
+}
+
+function stemCap(n: number) {
+  return Math.max(3, Math.ceil(n / 25));
+}
+
+/** Move the correct option to a target position (keeps option order otherwise). */
+function placeCorrect(q: Question, target: number): Question {
+  if (q.correctIndex === target) return q;
+  const choices = [...q.choices];
+  [choices[q.correctIndex], choices[target]] = [choices[target], choices[q.correctIndex]];
+  return { ...q, choices, correctIndex: target };
+}
+
 /* ---------------- 1. Analyze ---------------- */
 
 const AnalyzeInput = z.object({
   guidance: z.string().max(2000).optional(),
+  curriculum: z.string().max(120).optional(),
   sourceText: z.string().min(20),
   count: z.number().int().min(1).max(100).optional(),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
@@ -165,6 +241,11 @@ const AnalysisSchema = z.object({
   namedTerms: z.array(z.string()).default([]),
   coverageNotes: z.string(),
   maxQuestions: z.number().int().min(0).max(300).default(0),
+  concepts: z.array(z.string()).default([]),
+  objectives: z.array(z.string()).default([]),
+  keyTerms: z.array(z.string()).default([]),
+  calculations: z.array(z.string()).default([]),
+  sourceQuestions: z.array(z.string()).default([]),
 });
 
 export type Analysis = z.infer<typeof AnalysisSchema>;
@@ -175,14 +256,19 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
- - Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"namedTerms":[string],"coverageNotes":string,"maxQuestions":number}
+- Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"namedTerms":[string],"concepts":[string],"objectives":[string],"keyTerms":[string],"calculations":[string],"sourceQuestions":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
-- "topics": 5-12 distinct topics/concepts actually present in the notes, spread across the WHOLE text (beginning, middle and end), each a short phrase.
-- "keyFacts": short factual bullets grounded ONLY in the notes (max 20).
-- "summaries": short summaries (1-2 sentences each, max 12) of each usable section/part of the notes, in reading order. Only include parts that are actually testable; omit this list if the notes are too short to need it.
- - "namedTerms": up to 30 specifically defined named concepts, terms or devices copied with the exact singular spelling and capitalisation from their FIRST occurrence in the notes. Do not invent or pluralise names.
+- "topics": 5-12 distinct topics actually present in the notes, spread across the WHOLE text.
+- "keyFacts": short factual bullets grounded ONLY in the notes (max 60).
+- "summaries": short summaries (max 12) of each testable section, in reading order.
+- "namedTerms": up to 30 defined named concepts/terms copied with exact singular spelling and capitalisation from their FIRST occurrence.
+- "concepts": every DISTINCT testable concept in the notes (max 100), one short phrase each. Repeated mentions of the same fact are ONE concept. Each formula/worked example/data table counts as one concept.
+- "objectives": items from any Objectives / Learning outcomes / Key points list in the notes, verbatim-ish (empty if none).
+- "keyTerms": bold, highlighted or explicitly defined key terms (empty if none).
+- "calculations": every formula, equation, worked example, data table or numeric relationship in the notes (including ones inside diagrams/equations), written out compactly with the numbers. Empty if none.
+- "sourceQuestions": end-of-section / practice questions that appear in the notes, copied (max 10). Empty if none.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
-- "maxQuestions": how many GENUINELY DIFFERENT multiple-choice questions these notes can support. Count one question per distinct testable fact only. Two questions that test the same fact with different wording count as ONE. Be honest and conservative — a short set of notes usually supports far fewer than 20.
+- "maxQuestions": equal to the number of items in "concepts".
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
     const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
@@ -192,63 +278,133 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
     ]);
     try {
       const parsed = AnalysisSchema.parse(JSON.parse(raw));
+      const concepts = (parsed.concepts ?? []).slice(0, 100);
       return {
         topics: parsed.topics.slice(0, 12),
         keyFacts: parsed.keyFacts.slice(0, 60),
         summaries: (parsed.summaries ?? []).slice(0, 12),
         namedTerms: (parsed.namedTerms ?? []).slice(0, 30),
         coverageNotes: parsed.coverageNotes,
-        maxQuestions: parsed.maxQuestions ?? 0,
+        concepts,
+        objectives: (parsed.objectives ?? []).slice(0, 30),
+        keyTerms: (parsed.keyTerms ?? []).slice(0, 40),
+        calculations: (parsed.calculations ?? []).slice(0, 30),
+        sourceQuestions: (parsed.sourceQuestions ?? []).slice(0, 10),
+        // Capacity = distinct testable concepts (same number the warning uses)
+        maxQuestions: concepts.length || parsed.maxQuestions || 0,
       } satisfies Analysis;
     } catch {
-       return { topics: [], keyFacts: [], summaries: [], namedTerms: [], coverageNotes: "", maxQuestions: 0 } as Analysis;
+      return { topics: [], keyFacts: [], summaries: [], namedTerms: [], coverageNotes: "", maxQuestions: 0, concepts: [], objectives: [], keyTerms: [], calculations: [], sourceQuestions: [] } as Analysis;
     }
   });
 
 
 /* ---------------- 2. Generate ---------------- */
 
-function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
-  const topics = analysis?.topics?.length
-    ? `\n\nANALYSED TOPICS (spread questions evenly across these):\n${analysis.topics.map((t) => `- ${t}`).join("\n")}`
-    : "";
-  const facts = analysis?.keyFacts?.length
-    ? `\n\nKEY FACTS FROM THE NOTES:\n${analysis.keyFacts.map((f) => `- ${f}`).join("\n")}`
-    : "";
-  const sums = analysis?.summaries?.length
-    ? `\n\nSECTION SUMMARIES OF THE NOTES (use alongside the full source text):\n${analysis.summaries.map((s) => `- ${s}`).join("\n")}`
-    : "";
-  const terms = analysis?.namedTerms?.length
-    ? `\n\nEXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms):\n${analysis.namedTerms.map((term) => `- ${term}`).join("\n")}`
-    : "";
+function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
+  const list = (title: string, items?: string[]) => (items?.length ? `\n\n${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : "");
 
-  return `You generate multiple-choice quiz questions from provided source material. Rules:
+  return `You generate multiple-choice quiz questions from provided source material.
+
+${levelBlock(difficulty, spec, curriculum)}
+
+RULES:
 - Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
-- Each "sourceQuote" MUST be a verbatim substring copied directly from the source (10-30 words) that supports the correct answer. Never paraphrase it.
-- Exactly 4 choices, only one correct.
-- Use ONLY the source material. Never use outside knowledge as quiz facts.
-
-DIFFICULTY (${difficulty}):
-- easy = direct recall of a clearly stated fact or definition
-- medium = simple application, comparison, or restating an idea in new words
-- hard = inference, multi-step reasoning, cause/effect, or applying ideas to a new situation still supported by the notes
+- "sourceQuote" MUST be a verbatim substring of the source (6-30 words) supporting the answer. For calculation/application questions quote the formula, worked example or data used — the final answer itself does NOT need to appear in the source.
+- Exactly 4 choices, exactly one clearly correct.
+- Facts, formulas and data come ONLY from the source. Calculation/application answers may be derived from them, and must be worked out correctly.
 
 DISTRACTORS:
-- All 4 choices must have similar length and parallel grammar.
-- Wrong answers must be plausible common confusions drawn from the same notes. Never joke, absurd, empty, or obviously wrong options.
-- Exactly one option is defensibly correct.
+- Plausible misconceptions on the SAME topic as the question. For calculations use common mistakes (forgetting to add the masses, forgetting ×100, wrong unit conversion, inverted formula).
+- Never options from an unrelated part of the source, silly options, options that contradict the stem, or two wrong options that mean the same thing.
 
-COVERAGE:
-- Spread questions across the analysed topics and the whole source; do not cluster on the opening paragraphs.
+FORMATTING:
+- All 4 options share capitalisation, style, grammar and similar length; the correct option must never stand out. Don't capitalise ordinary terms (mass, weight) mid-sentence.
 
-STYLE:
-- Vary correctIndex across 0,1,2,3 — do not bias toward 0 or 1.
-- NO NEAR-DUPLICATES: never test the same fact twice. Two questions with the same correct answer, or that reword the same sentence of the notes, are forbidden — even if the wording, the options or the order differ. Each question must target a different fact, relationship or detail.
-- Do not repeat or lightly rephrase questions already accepted.
+STEMS:
+- Never write "according to the text/source/notes/definition". Every question stands alone.
+- Use the stem opening assigned in each question plan. Do not start most questions with "Which of the following".
+- Use the assigned correct-answer position (correctIndex) exactly.
 
  ${SELF_CONTAINED}
  ${TERM_CONSISTENCY}
- ${MATH_RULES}${styleBlock(spec)}${guidanceBlock(guidance)}${topics}${facts}${sums}${terms}`;
+ ${MATH_RULES}${guidanceBlock(guidance)}${list("ANALYSED TOPICS", analysis?.topics)}${list("KEY FACTS FROM THE NOTES", analysis?.keyFacts)}${list("FORMULAS / WORKED EXAMPLES / DATA IN THE NOTES", analysis?.calculations)}${list("THE SOURCE'S OWN PRACTICE QUESTIONS (use as a guide for style and difficulty)", analysis?.sourceQuestions)}${list("EXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms)", analysis?.namedTerms)}`;
+}
+
+/* ---------------- Blueprint: plan the whole set before writing ---------------- */
+
+type QType = "recall" | "calculation" | "explain" | "apply";
+type Slot = { concept: string; type: QType; answer: number; opener: string };
+
+const OPENERS: Record<QType, string[]> = {
+  recall: ["State", "Name", "What is", "Which term", "Identify", "Define", "What does", "Give"],
+  calculation: ["Calculate", "A student measures", "Work out", "If", "Determine", "A sample of", "Find", "What is the value"],
+  explain: ["Explain why", "Why does", "Describe", "What causes", "Suggest why", "How does", "What happens when"],
+  apply: ["Suggest", "Predict", "In an experiment", "A scientist", "Complete", "Deduce", "Which change", "When"],
+};
+
+function typeWeights(difficulty: string, spec?: Partial<StyleSpec> | null): Record<Exclude<QType, "calculation">, number> {
+  if (spec?.mode === "advanced") {
+    const c = spec.complexity ?? 3;
+    const o = spec.obscurity ?? 3;
+    const recall = Math.max(0, 0.8 - 0.2 * (c - 1) - 0.05 * (o - 1));
+    return { recall, explain: (1 - recall) * 0.45, apply: (1 - recall) * 0.55 };
+  }
+  if (difficulty === "easy") return { recall: 0.8, explain: 0.1, apply: 0.1 };
+  if (difficulty === "medium") return { recall: 0.45, explain: 0.25, apply: 0.3 };
+  return { recall: 0.05, explain: 0.4, apply: 0.55 };
+}
+
+function buildBlueprint(count: number, difficulty: string, analysis: Analysis | null, spec?: Partial<StyleSpec> | null): Slot[] {
+  const calcs = analysis?.calculations ?? [];
+  const nCalc = calcs.length ? Math.ceil(count * 0.4) : 0;
+  const w = typeWeights(difficulty, spec);
+  const rest = count - nCalc;
+  const nRecall = Math.round(rest * w.recall);
+  const nExplain = Math.round(rest * w.explain);
+  const nApply = Math.max(0, rest - nRecall - nExplain);
+  const pools: QType[][] = [Array(nCalc).fill("calculation"), Array(nApply).fill("apply"), Array(nExplain).fill("explain"), Array(nRecall).fill("recall")];
+  // Interleave so types are spread through the set
+  const types: QType[] = [];
+  while (types.length < count) {
+    let added = false;
+    for (const p of pools) if (p.length) { types.push(p.shift()!); added = true; }
+    if (!added) types.push("recall");
+  }
+
+  // Concepts: must-cover (objectives + key terms) first, then all other concepts; no repeat until all used
+  const seen = new Set<string>();
+  const ordered = [...(analysis?.objectives ?? []), ...(analysis?.keyTerms ?? []), ...(analysis?.concepts ?? []), ...(analysis?.topics ?? [])].filter((c) => {
+    const k = c.toLowerCase().trim();
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  let ci = 0;
+  let kci = 0;
+
+  // Balanced answer positions: shuffled blocks of 0..3
+  const answers: number[] = [];
+  while (answers.length < count) {
+    const block = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+    answers.push(...block);
+  }
+
+  const cap = stemCap(count);
+  const used = new Map<string, number>();
+  const pickOpener = (t: QType) => {
+    const all = [...OPENERS[t], ...Object.values(OPENERS).flat()];
+    const o = all.find((x) => (used.get(x) ?? 0) < cap) ?? OPENERS[t][0];
+    used.set(o, (used.get(o) ?? 0) + 1);
+    return o;
+  };
+
+  return types.map((type, i) => {
+    let concept: string;
+    if (type === "calculation" && calcs.length) concept = calcs[kci++ % calcs.length];
+    else concept = ordered.length ? ordered[ci++ % ordered.length] : "any untested part of the notes";
+    return { concept, type, answer: answers[i], opener: pickOpener(type) };
+  });
 }
 
 const GenerateInput = InputSchema.extend({
@@ -259,11 +415,12 @@ export const generateQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => GenerateInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, count, difficulty, spec, guidance } = data;
+    const { sourceText, count, difficulty, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
-    const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance);
+    const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance, curriculum);
 
+    const pending: Slot[] = buildBlueprint(count, difficulty, analysis, spec);
     const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
@@ -271,15 +428,20 @@ export const generateQuestions = createServerFn({ method: "POST" })
     let attempts = 0;
     let emptyStreak = 0;
 
-    while (validated.length < count && attempts < maxAttempts) {
+    while (validated.length < count && attempts < maxAttempts && pending.length) {
       attempts++;
-      const need = Math.min(count - validated.length, batch);
+      const slots = pending.slice(0, Math.min(count - validated.length, batch));
+      const need = slots.length;
 
       const avoid = validated.map((q) => q.question);
-      const userPrompt = `Generate ${need} quiz questions from this source. Return valid JSON only.${
-        analysis?.topics?.length ? `\n\nAllocate the ${need} questions across the analysed topics as evenly as possible.` : ""
-      }${
-        avoid.length ? `\n\nDo NOT repeat or rephrase any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
+      const plan = slots
+        .map(
+          (s, i) =>
+            `Question ${i + 1}: concept = "${s.concept}"; type = ${s.type}${s.type === "calculation" ? " (must require calculating/applying the formula or data)" : ""}; start the stem with "${s.opener}" (adapt grammar if needed); correctIndex = ${s.answer}.`,
+        )
+        .join("\n");
+      const userPrompt = `Generate exactly ${need} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nPLAN:\n${plan}${
+        avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
       let raw: string;
       try {
@@ -302,21 +464,28 @@ export const generateQuestions = createServerFn({ method: "POST" })
         continue;
       }
       let addedThisRound = 0;
-      for (const item of parsed.questions ?? []) {
-        const p = QuestionSchema.safeParse(item);
+      const items = parsed.questions ?? [];
+      for (let k = 0; k < items.length && k < slots.length; k++) {
+        const p = QuestionSchema.safeParse(items[k]);
         if (!p.success) continue;
-        const q = p.data;
+        const q = placeCorrect(p.data, slots[k].answer);
         const dedupKey = q.question.toLowerCase().trim();
         if (seen.has(dedupKey)) continue;
+        if (REFERS_TO_SOURCE.test(q.question)) continue;
         if (!validateQuestion(q, sourceNorm)) continue;
         if (validated.some((a) => tooSimilar(a, q))) continue;
         seen.add(dedupKey);
         validated.push(q);
+        pending.splice(pending.indexOf(slots[k]), 1);
         addedThisRound++;
         if (validated.length >= count) break;
       }
-      // Source exhausted — stop only after several rejected rounds IN A ROW
-      // (a single rejected question must not end the whole run).
+      // A slot that failed twice gets a fresh concept so the run doesn't stall on it
+      if (addedThisRound === 0 && pending.length) {
+        const s = pending.shift()!;
+        const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
+        pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+      }
       emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
       if (emptyStreak >= 5) break;
     }
@@ -340,25 +509,31 @@ const ReviewSchema = z.object({
   ),
 });
 
-const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) => `You are a strict quiz quality reviewer.
+const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
+${levelBlock(difficulty, spec, curriculum)}
 Check each question, in this order:
-1. GROUNDING (check first): does the question, and above all the marked correct answer, follow the notes exactly? Fail it if the correct answer is not stated or directly supported by the notes, if the sourceQuote is not really from the notes, or if it contradicts the notes.
-2. USER CRITERIA (check second): does it match the requested difficulty "${difficulty}" and every style control listed below?
-3. Are all distractors plausible and non-joke, similar in length and grammar, with only one defensibly correct answer?
-4. CONTEXT (fail if not met): could a learner who has never seen the notes answer this question from the stem and options alone? Fail it when the stem relies on unstated context, vague references ("it", "this process", "the author", "the above"), an undefined term, or mentions the passage/notes/text or another question.
- 5. Is it a duplicate or near-duplicate of another question in the set? Fail the later one whenever two questions test the same fact or share the same correct answer, however differently they are worded.
- 6. TERM CONSISTENCY: compare the entire set with the source. If the source defines a named concept, term or device, fail every question or answer option that pluralizes, abbreviates, respells or otherwise varies its first-appearing exact singular form. Include the exact source term in each issue so the replacement can correct it. Check consistency across different questions and options, not just within one question.
- Each issue is one short, actionable sentence. ${TERM_CONSISTENCY}${analysis?.namedTerms?.length ? `\nEXACT FIRST-OCCURRENCE SOURCE TERMS:\n${analysis.namedTerms.join("\n")}` : ""}${styleBlock(spec)}${guidanceBlock(guidance)}`;
+1. GROUNDING (check first): is the marked correct answer TRUE according to the notes? Accept answers stated in the notes AND answers DERIVED correctly from a formula, worked example, data table or rule in the notes (e.g. notes give speed = distance / time; a question asking the speed for 150 m in 10 s with answer 15 m/s is VALID). For derived answers, redo the working yourself and fail only if the working or result is wrong — never fail because the final answer text does not appear in the notes. Fail if it contradicts the notes or relies on outside facts.
+2. SETTINGS: fail it if it does not match the LEVEL & STYLE SETTINGS above (e.g. plain recall when the settings demand application, multi-step reasoning or inference; wrong length; missing curriculum command-word style).
+3. DISTRACTORS: wrong options must be plausible misconceptions on the same topic (for calculations: common mistakes such as a forgotten step, wrong unit conversion, not multiplying by 100). Fail for options from an unrelated part of the notes, silly options, options contradicting the stem, two wrong options meaning the same thing, or more than one defensible answer (ambiguous / double-correct).
+4. FORMATTING: all options must share capitalisation, style and similar length; the correct option must not stand out. Ordinary terms (mass, weight) must not be capitalised mid-sentence.
+5. CONTEXT: fail if a learner without the notes could not answer from the stem and options alone, or if it says "according to the text/source/notes/passage/definition", or uses vague references ("it", "this process", "the above").
+6. SET-LEVEL (compare the whole set): fail the later question when two test the same concept/fact (even reworded); fail questions whose stem opening (first 2-3 words) is used by more than 3 questions in the set${analysis?.objectives?.length ? "; when objectives or key terms below are not covered by any question while another concept is tested twice, fail one of the repeats and say which objective to test instead" : ""}.
+7. TERM CONSISTENCY: fail any question or option that pluralizes, abbreviates or respells a source-defined term; include the exact source term in the issue.
+Each issue is one short, actionable sentence. ${TERM_CONSISTENCY}${analysis?.namedTerms?.length ? `\nEXACT FIRST-OCCURRENCE SOURCE TERMS:\n${analysis.namedTerms.join("\n")}` : ""}${mustCoverList(analysis) ? `\nMUST-COVER OBJECTIVES / KEY TERMS:\n${mustCoverList(analysis).map((m) => `- ${m}`).join("\n")}` : ""}${guidanceBlock(guidance)}`;
 
+function mustCoverList(analysis?: Analysis | null): string[] {
+  if (!analysis) return [];
+  return [...(analysis.objectives ?? []), ...(analysis.keyTerms ?? [])];
+}
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null) {
-  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS:\n${JSON.stringify(
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
+  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS (correct answer marked by correctIndex):\n${JSON.stringify(
     questions.map((q, index) => ({ index, ...q })),
   )}`;
   const raw = await callAI([
-    { role: "system", content: REVIEW_SYSTEM(difficulty, analysis, spec, guidance) },
+    { role: "system", content: REVIEW_SYSTEM(difficulty, analysis, spec, guidance, curriculum) },
     { role: "user", content: user },
   ]);
   try {
@@ -370,6 +545,27 @@ async function reviewBatch(sourceText: string, questions: Question[], difficulty
   }
 }
 
+/** Deterministic set-level checks the reviewer may miss. */
+function localIssues(current: Question[]): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  const add = (i: number, s: string) => out.set(i, [...(out.get(i) ?? []), s]);
+  const cap = stemCap(current.length);
+  const openerCount = new Map<string, number>();
+  current.forEach((q, i) => {
+    if (REFERS_TO_SOURCE.test(q.question)) add(i, "Remove wording that refers to the text/source/notes; make the question standalone.");
+    const o = openerOf(q.question);
+    const n = (openerCount.get(o) ?? 0) + 1;
+    openerCount.set(o, n);
+    if (n > cap) add(i, `The stem opening "${o}" is overused; start the question differently.`);
+    for (let j = 0; j < i; j++) {
+      if (tooSimilar(current[j], q)) {
+        add(i, `Tests the same concept as question ${j + 1}; test a different concept from the notes.`);
+        break;
+      }
+    }
+  });
+  return out;
+}
 
 async function regenerateOne(
   sourceText: string,
@@ -380,7 +576,9 @@ async function regenerateOne(
   accepted: Question[],
   spec?: Partial<StyleSpec> | null,
   guidance?: string | null,
+  curriculum?: string | null,
 ): Promise<Question | null> {
+  const used = new Set(accepted.map((q) => openerOf(q.question)));
   const user = `Write ONE replacement quiz question.
 
 The following question FAILED review:
@@ -389,19 +587,20 @@ ${JSON.stringify(failed)}
 Reviewer issues to fix:
 ${issues.map((i) => `- ${i}`).join("\n") || "- low quality"}
 
-Fix these issues. Keep the same topic if the source supports it.${
-    analysis?.topics?.length ? `\nRelevant topics: ${analysis.topics.slice(0, 12).join(", ")}` : ""
+Fix these issues. Keep the same concept unless the issues say it duplicates another question.${
+    mustCoverList(analysis).length ? `\nMust-cover objectives/key terms: ${mustCoverList(analysis).join("; ")}` : ""
   }
+Avoid these overused stem openings: ${[...used].slice(0, 40).join(", ") || "(none)"}
 
 Do NOT duplicate any of these already-accepted questions:
-${accepted.slice(-30).map((q) => `- ${q.question}`).join("\n") || "(none)"}
+${accepted.map((q) => `- ${q.question}`).join("\n") || "(none)"}
 
 Return JSON with exactly one item: {"questions":[{...}]}
 
 SOURCE:
 """${sourceText}"""`;
   const raw = await callAI([
-    { role: "system", content: genSystemPrompt(difficulty, analysis, spec, guidance) },
+    { role: "system", content: genSystemPrompt(difficulty, analysis, spec, guidance, curriculum) },
     { role: "user", content: user },
   ]);
   try {
@@ -415,13 +614,13 @@ SOURCE:
 
 const ReviewInput = z.object({
   guidance: z.string().max(2000).optional(),
+  curriculum: z.string().max(120).optional(),
   sourceText: z.string().min(20),
   questions: z.array(QuestionSchema).min(1),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
   requested: z.number().int().min(1).max(100),
   analysis: AnalysisSchema.partial().optional(),
   spec: StyleSpecSchema.partial().optional(),
-
 });
 
 const MAX_REVIEW_ROUNDS = 5;
@@ -431,7 +630,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => ReviewInput.parse(raw))
   .handler(async ({ data }) => {
-    const { sourceText, questions, difficulty, requested, spec, guidance } = data;
+    const { sourceText, questions, difficulty, requested, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
 
@@ -445,13 +644,15 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
 
     for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
       rounds = round + 1;
-      const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance);
+      const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
       const verdict = new Map(reviews.map((r) => [r.index, r]));
+      const local = localIssues(current);
 
       const failing: Array<{ index: number; issues: string[] }> = [];
       current.forEach((_, i) => {
         const r = verdict.get(i);
-        if (r && !r.pass) failing.push({ index: i, issues: r.issues });
+        const extra = local.get(i) ?? [];
+        if ((r && !r.pass) || extra.length) failing.push({ index: i, issues: [...(r && !r.pass ? r.issues : []), ...extra] });
       });
 
       stillFailing = failing.length;
@@ -462,25 +663,16 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
         if (budget <= 0) break;
         budget--;
         const others = current.filter((_, i) => i !== f.index);
-        const replacement = await regenerateOne(
-          sourceText,
-          difficulty,
-          analysis,
-          current[f.index],
-          f.issues,
-          others,
-          spec,
-          guidance,
-        );
+        const replacement = await regenerateOne(sourceText, difficulty, analysis, current[f.index], f.issues, others, spec, guidance, curriculum);
         if (!replacement) continue;
         const dupe = others.some(
           (a) =>
             a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim() ||
             tooSimilar(a, replacement),
         );
-        /* Only swap in a replacement that is grounded in the notes and not a duplicate */
-        if (dupe || !validateQuestion(replacement, sourceNorm)) continue;
-        current[f.index] = replacement;
+        if (dupe || REFERS_TO_SOURCE.test(replacement.question) || !validateQuestion(replacement, sourceNorm)) continue;
+        /* Keep the planned answer position so the A-D balance is preserved */
+        current[f.index] = placeCorrect(replacement, current[f.index].correctIndex);
         regenerated++;
         changed = true;
       }
