@@ -58,8 +58,8 @@ function AuthPage() {
     setBusy(true);
     try {
       const lower = username.toLowerCase();
-      const { data: existing } = await supabase.from("profiles").select("id").eq("username_lower", lower).maybeSingle();
-      if (existing) {
+      const { taken } = await isUsernameTaken({ data: { username } });
+      if (taken) {
         toast.error("That username is already taken.");
         return;
       }
