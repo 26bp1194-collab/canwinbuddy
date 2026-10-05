@@ -112,6 +112,20 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // Alt+Ctrl+0 toggles true browser fullscreen for the whole app.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.altKey && e.ctrlKey) || e.key !== "0") return;
+      e.preventDefault();
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      } else {
+        void document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
