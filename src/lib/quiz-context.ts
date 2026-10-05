@@ -33,6 +33,7 @@ export const SUBJECTS = [
 export type SubjectEntry = { value: string; custom: string };
 
 export type AudienceEntry =
+  | { kind: "empty" }
   | { kind: "single"; age: number }
   | { kind: "range"; least: number; highest: number }
   | { kind: "all" };
@@ -53,6 +54,7 @@ export function subjectText(s: SubjectEntry): string {
 }
 
 export function audienceText(a: AudienceEntry): string {
+  if (a.kind === "empty") return "";
   if (a.kind === "single") return ageLabel(a.age);
   if (a.kind === "all") return "All ages (6-18)";
   const [lo, hi] = a.least <= a.highest ? [a.least, a.highest] : [a.highest, a.least];
