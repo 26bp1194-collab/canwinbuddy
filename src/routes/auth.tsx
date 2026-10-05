@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
+import { isUsernameTaken } from "@/lib/username.functions";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
@@ -58,8 +59,8 @@ function AuthPage() {
     setBusy(true);
     try {
       const lower = username.toLowerCase();
-      const { data: existing } = await supabase.from("profiles").select("id").eq("username_lower", lower).maybeSingle();
-      if (existing) {
+      const { taken } = await isUsernameTaken({ data: { username } });
+      if (taken) {
         toast.error("That username is already taken.");
         return;
       }
