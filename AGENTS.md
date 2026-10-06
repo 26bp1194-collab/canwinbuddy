@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+ 
+- Keep source text, topics, and the input mode in the Generate page's per-tab draft; the worksheet dialog consumes these shared inputs rather than owning another editor, so switching and navigation preserve content.

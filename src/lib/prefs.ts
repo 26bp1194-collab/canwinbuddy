@@ -173,6 +173,8 @@ export function useQuizDefaults() {
 
 export type GenerateDraft = {
   source: string;
+  topics?: string;
+  notesMode?: "source" | "topics";
   title: string;
   count: number;
   countText?: string;

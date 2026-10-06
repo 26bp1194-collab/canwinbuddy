@@ -8,25 +8,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { SUBJECTS, AGES, ageLabel } from "@/lib/quiz-context";
 import { CURRICULA } from "@/lib/prefs";
-import { listKeyDown } from "@/lib/list-input";
 import { generateWorksheet } from "@/lib/worksheet.functions";
 
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   sourceText: string;
+  topics: string;
   title: string;
   initialSubject?: string;
   initialAge?: number;
   initialCurriculum?: string;
 };
 
-export function WorksheetDialog({ open, onOpenChange, sourceText, title, initialSubject, initialAge, initialCurriculum }: Props) {
+export function WorksheetDialog({ open, onOpenChange, sourceText, topics, title, initialSubject, initialAge, initialCurriculum }: Props) {
   const navigate = useNavigate();
   const gen = useServerFn(generateWorksheet);
   const [subject, setSubject] = useState("");
@@ -34,16 +32,12 @@ export function WorksheetDialog({ open, onOpenChange, sourceText, title, initial
   const [age, setAge] = useState("");
   const [curriculum, setCurriculum] = useState("");
   const [customCurriculum, setCustomCurriculum] = useState("");
-  const [topics, setTopics] = useState("");
-  const [worksheetSource, setWorksheetSource] = useState(sourceText);
-  const [showSource, setShowSource] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setErrors({});
-    setWorksheetSource(sourceText);
     if (initialSubject && !subject) {
       if ((SUBJECTS as readonly string[]).includes(initialSubject)) setSubject(initialSubject);
       else { setSubject("Others"); setCustomSubject(initialSubject); }
@@ -64,12 +58,12 @@ export function WorksheetDialog({ open, onOpenChange, sourceText, title, initial
     if (!subjectValue) e.subject = "Choose a subject.";
     if (!age) e.age = "Choose an age.";
     if (!curriculumValue) e.curriculum = "Choose a curriculum.";
-    if (!worksheetSource.trim() && !topics.trim()) e.topics = "Add topics to follow, or add source text.";
+    if (!sourceText.trim() && !topics.trim()) e.topics = "Add topics or source text in the Notes Space.";
     setErrors(e);
     if (Object.keys(e).length) return;
     setBusy(true);
     try {
-      const { id } = await gen({ data: { subject: subjectValue, age: Number(age), curriculum: curriculumValue, topics, sourceText: worksheetSource, title } });
+      const { id } = await gen({ data: { subject: subjectValue, age: Number(age), curriculum: curriculumValue, topics, sourceText, title } });
       toast.success("Worksheet created");
       onOpenChange(false);
       navigate({ to: "/worksheet/$id", params: { id } });
@@ -88,7 +82,7 @@ export function WorksheetDialog({ open, onOpenChange, sourceText, title, initial
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Create Worksheet</DialogTitle>
           <DialogDescription>
-            Built in the real format of your curriculum and age, using your source text{sourceText.trim() ? " (already added)" : ""} and the topics below.
+            Built in the real format of your curriculum and age, using your source text and topics from the Notes Space.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -128,23 +122,7 @@ export function WorksheetDialog({ open, onOpenChange, sourceText, title, initial
             {err("curriculum")}
           </div>
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <Label htmlFor={showSource ? "worksheet-source" : "worksheet-topics"}>{showSource ? "Source Text" : "Topics to follow"}</Label>
-              <Switch
-                checked={showSource}
-                onCheckedChange={setShowSource}
-                aria-label="Switch between topics and source text"
-              />
-            </div>
-            <Textarea
-              id={showSource ? "worksheet-source" : "worksheet-topics"}
-              rows={4}
-              value={showSource ? worksheetSource : topics}
-              onChange={(e) => showSource ? setWorksheetSource(e.target.value) : setTopics(e.target.value)}
-              onKeyDown={(e) => showSource ? listKeyDown(e, setWorksheetSource) : listKeyDown(e, setTopics)}
-              placeholder={showSource ? "Paste source text here…" : "1. Photosynthesis\n2. Cell structure"}
-              maxLength={showSource ? 60000 : 4000}
-            />
+            <p className="text-sm text-muted-foreground">Add title, notes, topics, or files in the Notes Space for generating quizzes.</p>
             {err("topics")}
           </div>
         </div>

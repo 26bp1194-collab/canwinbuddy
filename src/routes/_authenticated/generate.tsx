@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/generate")({
@@ -57,6 +58,8 @@ export const Route = createFileRoute("/_authenticated/generate")({
       { name: "description", content: "Paste text or upload PDFs, docs, spreadsheets, or images. AI generates and validates quiz questions against your source." },
       { property: "og:title", content: "Generate Quiz Questions — CanWinBuddy" },
       { property: "og:description", content: "Turn any document into validated quiz questions in seconds." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/generate" },
     ],
     links: [{ rel: "canonical", href: "/generate" }],
@@ -73,10 +76,13 @@ function GeneratePage() {
   const navigate = useNavigate();
   const t = useT();
   const [source, setSource] = useState("");
+  const [topics, setTopics] = useState("");
+  const [notesMode, setNotesMode] = useState<"source" | "topics">("source");
+  const notesText = notesMode === "source" ? source : topics;
   const [title, setTitle] = useState("");
   const [countText, setCountText] = useState("10");
   const count = Math.max(1, Math.min(100, Number(countText) || 1));
-  const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0;
+  const wordCount = notesText.trim() ? notesText.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [curriculum, setCurriculum] = useState<Curriculum>("none");
   const [customCurriculum, setCustomCurriculum] = useState("");
@@ -124,6 +130,8 @@ function GeneratePage() {
        only the content (source, title, subject/for, instructions) is restored. */
     if (draft && !prefill) {
       setSource(draft.source);
+      setTopics(draft.topics ?? "");
+      setNotesMode(draft.notesMode ?? "source");
       setTitle(draft.title);
       if (draft.subjects?.length) setSubjects(draft.subjects);
       if (draft.audiences?.length) {
@@ -210,12 +218,12 @@ function GeneratePage() {
       !instructions.trim() &&
       subjects.length === 1 && subjects[0].value === "No subject" &&
       audiences.length === 1 && audiences[0].kind === "empty";
-    if (!source.trim() && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
+    if (!source.trim() && !topics.trim() && notesMode === "source" && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
       clearDraft();
       return;
     }
-    saveDraft({ source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
-  }, [source, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
+    saveDraft({ source, topics, notesMode, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
+  }, [source, topics, notesMode, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
 
 
   const resetSettings = () => {
@@ -236,6 +244,7 @@ function GeneratePage() {
 
   const useHelperText = (text: string) => {
     setSource(text);
+    setNotesMode("source");
     setHelperOpen(false);
     toast.success(t("Text applied to source"));
   };
@@ -321,7 +330,7 @@ function GeneratePage() {
   };
 
   const run = async () => {
-    if (!source.trim() && files.length === 0) {
+    if (!source.trim() && !topics.trim() && files.length === 0) {
       toast.error(t("Add source text or upload a file first."));
       return;
     }
@@ -329,7 +338,7 @@ function GeneratePage() {
     const steps: StepTiming[] = [];
     const mark = makeMark(started, steps);
 
-    let combined = source.trim();
+    let combined = [source.trim(), topics.trim() ? `Topics to follow:\n${topics.trim()}` : ""].filter(Boolean).join("\n\n");
     let analysis: Analysis;
     try {
       setTimings([]);
@@ -431,6 +440,7 @@ function GeneratePage() {
                 open={worksheetOpen}
                 onOpenChange={setWorksheetOpen}
                 sourceText={source}
+                topics={topics}
                 title={title}
                 initialSubject={subjects.map(wsSubjectText).find(Boolean)}
                 initialAge={audiences[0]?.kind === "single" && audiences[0].age <= 18 ? audiences[0].age : undefined}
@@ -450,7 +460,10 @@ function GeneratePage() {
 
               <div>
                 <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:justify-between">
-                  <Label htmlFor="src" className="min-w-0 truncate">{t("Source text")}</Label>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Label htmlFor="src" className="min-w-0 truncate">{t(notesMode === "source" ? "Source Text" : "Topics to follow")}</Label>
+                    <Switch checked={notesMode === "topics"} onCheckedChange={(checked) => setNotesMode(checked ? "topics" : "source")} aria-label="Switch between source text and topics to follow" />
+                  </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {wordCount.toLocaleString()} {wordCount === 1 ? t("word") : t("words")}
@@ -463,10 +476,10 @@ function GeneratePage() {
                 </div>
                 <Textarea
                   id="src"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  onKeyDown={(e) => listKeyDown(e, setSource)}
-                  placeholder={t("Paste your notes, article, or study material here…")}
+                  value={notesText}
+                  onChange={(e) => notesMode === "source" ? setSource(e.target.value) : setTopics(e.target.value)}
+                  onKeyDown={(e) => listKeyDown(e, notesMode === "source" ? setSource : setTopics)}
+                  placeholder={notesMode === "source" ? t("Paste your notes, article, or study material here…") : "1. Photosynthesis\n2. Cell structure"}
                   className="min-h-[180px] resize-y sm:min-h-[220px]"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">{t("Your text and settings are saved automatically if you leave this page.")}</p>

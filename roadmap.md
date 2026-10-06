@@ -6,4 +6,4 @@
 - [x] Rename difficulty labels to Simple/Average/Difficult; confirm system defaults.
 - [x] Replace Generate's For selector with an optional Age input limited to 7–25.
 - [x] Add a textless worksheet switch between Topics to follow and Source Text while preserving both.
-- [ ] Move the switch to Notes (Source Text first), preserve both inputs, and replace worksheet inputs with the requested message.
+- [x] Move the switch to Notes (Source Text first), preserve both inputs, and replace worksheet inputs with the requested message.
