@@ -1,6 +1,5 @@
-/// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
-import { shouldCompactPaste, parseTopics, topicsPreview, combineNoteSources } from "./note-sources";
+import { shouldCompactPaste, parseTopics, topicsPreview, combineNoteSources } from "../src/lib/note-sources.ts";
 
 describe("compact notes rules", () => {
   test("300-character pastes are compact while 299 stay text", () => {
