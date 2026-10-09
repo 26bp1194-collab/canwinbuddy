@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Moon, Sun, LogOut, User, ListChecks, Languages, SlidersHorizontal, Loader2, Save, X, RotateCcw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
+import { getQuickSourceDelete, setQuickSourceDelete } from "@/lib/note-sources";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
 import {
@@ -46,6 +47,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
       { property: "og:title", content: "Account Settings — CanWinBuddy" },
       { property: "og:description", content: "Manage your CanWinBuddy account, language, and quiz defaults." },
       { property: "og:url", content: "/settings" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
     links: [{ rel: "canonical", href: "/settings" }],
   }),
@@ -57,6 +60,7 @@ type Form = {
   planning: boolean;
   quickQuizDelete: boolean;
   quickGroupDelete: boolean;
+  quickSourceDelete: boolean;
   skipInfo: SkipInfoWarning;
   defaults: QuizDefaults;
 };
@@ -83,12 +87,13 @@ function SettingsPage() {
       planning: getPlanningEnabled(),
       quickQuizDelete: getQuickQuizDelete(),
       quickGroupDelete: getQuickGroupDelete(),
+      quickSourceDelete: getQuickSourceDelete(),
       skipInfo: getSkipInfoWarning(),
       defaults: getQuizDefaults(),
     };
     setSaved(current);
     const draft = getSettingsDraft<Form>();
-    setForm(draft ?? current);
+    setForm(draft ? { ...current, ...draft } : current);
     hydrated.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -117,8 +122,8 @@ function SettingsPage() {
 
   if (!form || !saved) return null;
 
-  const patch = (p: Partial<Form>) => setForm((f) => ({ ...f!, ...p }));
-  const patchDefaults = (p: Partial<QuizDefaults>) => setForm((f) => ({ ...f!, defaults: { ...f!.defaults, ...p } }));
+  const patch = (p: Partial<Form>) => setForm((f) => f ? ({ ...f, ...p }) : f);
+  const patchDefaults = (p: Partial<QuizDefaults>) => setForm((f) => f ? ({ ...f, defaults: { ...f.defaults, ...p } }) : f);
 
   const editingSpec: StyleSpec =
     mode === "simple"
@@ -139,6 +144,7 @@ function SettingsPage() {
     setPlanningEnabledValue(form.planning);
     setQuickQuizDeleteValue(form.quickQuizDelete);
     setQuickGroupDeleteValue(form.quickGroupDelete);
+    setQuickSourceDelete(form.quickSourceDelete);
     setSkipInfoWarningValue(form.skipInfo);
     if (form.appLanguage !== language) setLanguage(form.appLanguage);
     setSaved(form);
@@ -157,6 +163,7 @@ function SettingsPage() {
       planning: true,
       quickQuizDelete: false,
       quickGroupDelete: false,
+      quickSourceDelete: false,
       skipInfo: DEFAULT_SKIP_INFO,
       defaults: DEFAULT_QUIZ_DEFAULTS,
     });
@@ -317,6 +324,10 @@ function SettingsPage() {
             {t("Delete with a single click instead of confirming with “Are you sure?”.")}
           </p>
           <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-xl border border-border bg-secondary/40 p-4">
+              <Label htmlFor="quick-source" className="min-w-0 cursor-pointer text-sm font-medium">{t("Quick source removal")}</Label>
+              <Switch id="quick-source" checked={form.quickSourceDelete} onCheckedChange={(v) => patch({ quickSourceDelete: v })} className="shrink-0" />
+            </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-xl border border-border bg-secondary/40 p-4">
               <Label htmlFor="quick-quiz" className="min-w-0 cursor-pointer text-sm font-medium">
                 {t("Quick quiz delete")}
