@@ -5,7 +5,8 @@ import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, Sli
 import { toast } from "sonner";
 
 import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
-import { parseFile } from "@/lib/file-parse";
+import { NotesSpace } from "@/components/notes-space";
+import { combineNoteSources, parseTopics, type NoteSource } from "@/lib/note-sources";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
@@ -76,13 +77,12 @@ function GeneratePage() {
   const navigate = useNavigate();
   const t = useT();
   const [source, setSource] = useState("");
-  const [topics, setTopics] = useState("");
-  const [notesMode, setNotesMode] = useState<"source" | "topics">("source");
-  const notesText = notesMode === "source" ? source : topics;
+  const [noteSources, setNoteSources] = useState<NoteSource[]>([]);
+  const combinedNotes = combineNoteSources(source, noteSources);
   const [title, setTitle] = useState("");
   const [countText, setCountText] = useState("10");
   const count = Math.max(1, Math.min(100, Number(countText) || 1));
-  const wordCount = notesText.trim() ? notesText.trim().split(/\s+/).length : 0;
+  const wordCount = combinedNotes.trim() ? combinedNotes.trim().split(/\s+/).length : 0;
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [curriculum, setCurriculum] = useState<Curriculum>("none");
   const [customCurriculum, setCustomCurriculum] = useState("");
@@ -105,13 +105,11 @@ function GeneratePage() {
   const [instructions, setInstructions] = useState("");
   const [worksheetOpen, setWorksheetOpen] = useState(false);
 
-  const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>("input");
   const [generateStep, setGenerateStep] = useState<GenerateStep>("notes");
   const [customisationVisited, setCustomisationVisited] = useState(false);
   const [timings, setTimings] = useState<StepTiming[]>([]);
   const [totalMs, setTotalMs] = useState(0);
-  const fileInput = useRef<HTMLInputElement>(null);
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperSeed, setHelperSeed] = useState("");
   const restored = useRef(false);
@@ -130,8 +128,7 @@ function GeneratePage() {
        only the content (source, title, subject/for, instructions) is restored. */
     if (draft && !prefill) {
       setSource(draft.source);
-      setTopics(draft.topics ?? "");
-      setNotesMode(draft.notesMode ?? "source");
+      setNoteSources(draft.noteSources ?? (draft.topics?.trim() ? [{ id: "legacy-topics", kind: "topics", name: "Topics to follow", text: draft.topics, topics: parseTopics(draft.topics) }] : []));
       setTitle(draft.title);
       if (draft.subjects?.length) setSubjects(draft.subjects);
       if (draft.audiences?.length) {
@@ -218,12 +215,12 @@ function GeneratePage() {
       !instructions.trim() &&
       subjects.length === 1 && subjects[0].value === "No subject" &&
       audiences.length === 1 && audiences[0].kind === "empty";
-    if (!source.trim() && !topics.trim() && notesMode === "source" && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
+    if (!source.trim() && noteSources.length === 0 && !title.trim() && settingsAreDefault && contextIsDefault && generateStep === "notes") {
       clearDraft();
       return;
     }
-    saveDraft({ source, topics, notesMode, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
-  }, [source, topics, notesMode, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
+    saveDraft({ source, noteSources, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
+  }, [source, noteSources, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
 
 
   const resetSettings = () => {
@@ -244,17 +241,9 @@ function GeneratePage() {
 
   const useHelperText = (text: string) => {
     setSource(text);
-    setNotesMode("source");
     setHelperOpen(false);
     toast.success(t("Text applied to source"));
   };
-
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    setFiles((f) => [...f, ...Array.from(list)]);
-  };
-
-  const removeFile = (i: number) => setFiles((f) => f.filter((_, idx) => idx !== i));
 
   const makeMark = (started: number, steps: StepTiming[]) => (label: string, from: number) => {
     steps.push({ label, ms: performance.now() - from });
@@ -268,6 +257,7 @@ function GeneratePage() {
     const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
     const curriculumName = curriculumText({ curriculum, customCurriculum });
     try {
+      if (!user) throw new Error("Please log in before generating a quiz.");
       setStage("generating");
       const t1 = performance.now();
       const generated = await generateQuestions({
@@ -288,7 +278,7 @@ function GeneratePage() {
       const { data: inserted, error } = await supabase
         .from("quiz_sets")
         .insert({
-          user_id: user!.id,
+          user_id: user.id,
           title: finalTitle,
           source_text: combined,
           questions: JSON.parse(JSON.stringify(questions)),
@@ -330,7 +320,7 @@ function GeneratePage() {
   };
 
   const run = async () => {
-    if (!source.trim() && !topics.trim() && files.length === 0) {
+    if (!combinedNotes.trim()) {
       toast.error(t("Add source text or upload a file first."));
       return;
     }
@@ -338,7 +328,7 @@ function GeneratePage() {
     const steps: StepTiming[] = [];
     const mark = makeMark(started, steps);
 
-    let combined = [source.trim(), topics.trim() ? `Topics to follow:\n${topics.trim()}` : ""].filter(Boolean).join("\n\n");
+    const combined = combinedNotes;
     let analysis: Analysis;
     try {
       setTimings([]);
@@ -346,12 +336,6 @@ function GeneratePage() {
 
       setStage("extracting");
       const t0 = performance.now();
-      if (files.length > 0) {
-        for (const f of files) {
-          const text = await parseFile(f);
-          combined += (combined ? "\n\n" : "") + `[${f.name}]\n${text}`;
-        }
-      }
       mark("Extracting source content", t0);
 
       if (combined.length < 30) {
@@ -439,8 +423,8 @@ function GeneratePage() {
               <WorksheetDialog
                 open={worksheetOpen}
                 onOpenChange={setWorksheetOpen}
-                sourceText={source}
-                topics={topics}
+                sourceText={combinedNotes}
+                topics={""}
                 title={title}
                 initialSubject={subjects.map(wsSubjectText).find(Boolean)}
                 initialAge={audiences[0]?.kind === "single" && audiences[0].age <= 18 ? audiences[0].age : undefined}
@@ -461,8 +445,7 @@ function GeneratePage() {
               <div>
                 <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
-                    <Label htmlFor="src" className="min-w-0 truncate">{t(notesMode === "source" ? "Source Text" : "Topics to follow")}</Label>
-                    <Switch checked={notesMode === "topics"} onCheckedChange={(checked) => setNotesMode(checked ? "topics" : "source")} aria-label="Switch between source text and topics to follow" />
+                    <Label htmlFor="src" className="min-w-0 truncate">{t("Source Text")}</Label>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                     <span className="text-xs text-muted-foreground tabular-nums">
@@ -474,57 +457,8 @@ function GeneratePage() {
                     </Button>
                   </div>
                 </div>
-                <Textarea
-                  id="src"
-                  value={notesText}
-                  onChange={(e) => notesMode === "source" ? setSource(e.target.value) : setTopics(e.target.value)}
-                  onKeyDown={(e) => listKeyDown(e, notesMode === "source" ? setSource : setTopics)}
-                  placeholder={notesMode === "source" ? t("Paste your notes, article, or study material here…") : "1. Photosynthesis\n2. Cell structure"}
-                  className="min-h-[180px] resize-y sm:min-h-[220px]"
-                />
+                <NotesSpace source={source} onSourceChange={setSource} sources={noteSources} onSourcesChange={setNoteSources} />
                 <p className="mt-1 text-xs text-muted-foreground">{t("Your text and settings are saved automatically if you leave this page.")}</p>
-              </div>
-
-              <div>
-                <Label className="mb-2 block">{t("Or upload files")}</Label>
-                <div
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-                  onClick={() => fileInput.current?.click()}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-accent/30 px-3 py-6 text-center transition-colors hover:bg-accent/60 sm:py-8"
-                >
-                  <Upload className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-sm font-medium">{t("Drop files or click to upload")}</p>
-                  <p className="text-xs text-muted-foreground">PDF, DOCX, XLSX, CSV, TXT, PNG, JPG</p>
-                  <input
-                    ref={fileInput}
-                    type="file"
-                    multiple
-                    accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,image/*"
-                    onChange={(e) => addFiles(e.target.files)}
-                    className="hidden"
-                  />
-                </div>
-                {files.length > 0 && (
-                  <ul className="mt-3 space-y-2">
-                    {files.map((f, i) => (
-                      <li key={i} className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <FileText className="h-4 w-4 shrink-0 text-primary" />
-                          <span className="truncate">{f.name}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">({(f.size / 1024).toFixed(0)} KB)</span>
-                        </span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                          className="shrink-0 text-muted-foreground hover:text-foreground"
-                          aria-label={`Remove ${f.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
                 <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>

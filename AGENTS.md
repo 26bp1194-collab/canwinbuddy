@@ -9,4 +9,4 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
  
-- Keep source text, topics, and the input mode in the Generate page's per-tab draft; the worksheet dialog consumes these shared inputs rather than owning another editor, so switching and navigation preserve content.
+- Keep source text and serializable verified-source attachments in the Generate page per-tab draft, and pass their complete combined text to both quiz and worksheet generation; this preserves sources across navigation without keeping raw File objects.

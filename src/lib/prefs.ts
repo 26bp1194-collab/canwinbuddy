@@ -173,6 +173,7 @@ export function useQuizDefaults() {
 
 export type GenerateDraft = {
   source: string;
+  noteSources?: import("./note-sources").NoteSource[];
   topics?: string;
   notesMode?: "source" | "topics";
   title: string;
