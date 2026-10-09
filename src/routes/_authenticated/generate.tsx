@@ -257,6 +257,7 @@ function GeneratePage() {
     const guidance = buildGuidance(subjects, audiences, instructions, { curriculum, customCurriculum });
     const curriculumName = curriculumText({ curriculum, customCurriculum });
     try {
+      if (!user) throw new Error("Please log in before generating a quiz.");
       setStage("generating");
       const t1 = performance.now();
       const generated = await generateQuestions({
@@ -277,7 +278,7 @@ function GeneratePage() {
       const { data: inserted, error } = await supabase
         .from("quiz_sets")
         .insert({
-          user_id: user?.id,
+          user_id: user.id,
           title: finalTitle,
           source_text: combined,
           questions: JSON.parse(JSON.stringify(questions)),
