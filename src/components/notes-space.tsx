@@ -118,7 +118,7 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
             <div className="min-w-0 flex-1"><p className="truncate">{f.name}</p><p className={f.status === "error" ? "break-words text-xs text-destructive" : "text-xs text-muted-foreground"}>{f.status === "checking" ? "Checking access…" : f.status === "ready" ? "Verified · readable" : f.error}</p></div>
             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label={`Discard ${f.name}`} disabled={verifiedFiles.some((item) => item.status === "checking")} onClick={() => setVerifiedFiles((prev) => prev.filter((_, index) => index !== i))}><X className="h-3 w-3" /></Button>
           </div>)}</div>
-        </> : <><Textarea aria-label="Topics to follow" value={input} onChange={(e) => { setInput(e.target.value); setTopicError(""); }} onKeyDown={(e) => dialog === "topics" && listKeyDown(e, setInput)} className="min-h-[320px]" placeholder="1. Forces and motion\n2. Energy transfers\n3. Electricity" />
+        </> : <><Textarea aria-label="Topics to follow" value={input} onChange={(e) => { setInput(e.target.value); setTopicError(""); }} onKeyDown={(e) => dialog === "topics" && listKeyDown(e, setInput)} className="min-h-[320px]" placeholder={"1. Forces and motion\n2. Energy transfers\n3. Electricity"} />
           {topicError && <p role="alert" className="text-sm text-destructive">{topicError}</p>}
         </>}
         <DialogFooter><Button disabled={(dialog === "files" ? !verifiedFiles.length || verifiedFiles.some((f) => f.status !== "ready") : !input.trim())} onClick={() => {
