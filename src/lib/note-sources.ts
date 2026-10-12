@@ -1,6 +1,6 @@
 export type NoteSource = {
   id: string;
-  kind: "file" | "link" | "topics" | "paste";
+  kind: "file" | "topics" | "paste";
   name: string;
   text: string;
   topics?: string[];
