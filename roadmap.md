@@ -1,6 +1,5 @@
 # Current tasks
-- [ ] Unify Notes Space with verified files/links, topics and compact pasted-note bubbles.
-- [ ] Add trusted Research Mode and shared quiz/worksheet source preparation.
+- [ ] Unify Notes Space with verified files, topics and compact pasted-note bubbles.
 - [ ] Add source-removal confirmation preference and verify drafts/interactions.
 - [x] Clear AI Text Helper inputs/output once a quiz is generated.
 - [x] Move Create Worksheet to bottom-left beside Next.

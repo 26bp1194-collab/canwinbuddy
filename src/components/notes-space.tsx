@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FileText, Globe, List, Loader2, Plus, Search, Upload, X, Pencil, Check, Type, Trash2 } from "lucide-react";
+import { FileText, List, Loader2, Plus, Upload, X, Pencil, Check, Type, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ type VerifiedFile = { name: string; text: string; status: "checking" | "ready" |
 type Props = { source: string; onSourceChange: (v: string) => void; sources: NoteSource[]; onSourcesChange: (v: NoteSource[]) => void };
 
 export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }: Props) {
-  const [dialog, setDialog] = useState<"files" | "links" | "topics" | null>(null);
+  const [dialog, setDialog] = useState<"files" | "topics" | null>(null);
   const [input, setInput] = useState("");
   const [verifiedFiles, setVerifiedFiles] = useState<VerifiedFile[]>([]);
   const [topicError, setTopicError] = useState("");
@@ -86,8 +86,8 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
           {s.kind === "paste" ? <Button variant="ghost" className="h-full w-full flex-col items-start justify-start gap-2 overflow-hidden p-3 text-left" aria-label={`Open ${s.name}`} onClick={() => { setSelected(s); setEditing(false); setEditText(s.text); }}>
             <FileText className="h-4 w-4 shrink-0 text-primary" /><span className="line-clamp-2 whitespace-normal break-words pr-2 text-xs">{s.text}</span><span className="text-xs text-muted-foreground">{s.text.length} characters</span>
           </Button> : <span className="flex min-w-0 items-center gap-2 text-sm">
-            {s.kind === "topics" ? <List className="h-4 w-4 shrink-0 text-primary" /> : s.kind === "link" ? <Globe className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
-            <span className={s.kind === "link" ? "truncate text-primary" : "truncate"} title={s.kind === "topics" ? s.text : s.name}>{s.kind === "topics" ? topicsPreview(s.topics ?? parseTopics(s.text)) : s.name}</span>
+            {s.kind === "topics" ? <List className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
+            <span className="truncate" title={s.kind === "topics" ? s.text : s.name}>{s.kind === "topics" ? topicsPreview(s.topics ?? parseTopics(s.text)) : s.name}</span>
           </span>}
           <Button type="button" variant="ghost" size="icon" className={s.kind === "paste" ? "absolute right-0 top-0 h-7 w-7" : "h-8 w-8 shrink-0"} title="Remove source" aria-label={`Remove ${s.name}`} onClick={() => remove(s.id)}><X className="h-3.5 w-3.5" /></Button>
         </div>)}
@@ -99,9 +99,7 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
         <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Add source" title="Add source"><Plus className="h-5 w-5" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuItem onSelect={() => openDialog("files")}><Upload />Add files</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openDialog("links")}><Globe />Add web-links</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openDialog("topics")}><List />Add topics to follow</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => toast.error("Research Mode needs a connected web search service. The web connection was not enabled.")}><Search />Enable Research Mode</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -109,7 +107,7 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
 
     <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open) openDialog(null); }}>
       <DialogContent className={dialog === "topics" ? "max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-sm" : "max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl"}>
-        <DialogHeader><DialogTitle>{dialog === "files" ? "Add files" : dialog === "links" ? "Add web-links" : "Add topics to follow"}</DialogTitle><DialogDescription>{dialog === "files" ? "Files are checked for readable content before insertion." : dialog === "links" ? "Website access must be verified before insertion." : "Separate topics with commas, numbered lists, or bullet lists."}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{dialog === "files" ? "Add files" : "Add topics to follow"}</DialogTitle><DialogDescription>{dialog === "files" ? "Files are checked for readable content before insertion." : "Separate topics with commas, numbered lists, or bullet lists."}</DialogDescription></DialogHeader>
         {dialog === "files" ? <>
           <Button variant="outline" className="h-40 w-full flex-col gap-2 whitespace-normal border-dashed" onClick={() => fileInput.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void verifyFiles(Array.from(e.dataTransfer.files)); }} disabled={verifiedFiles.some((f) => f.status === "checking")}>
             <Upload className="h-6 w-6 text-muted-foreground" /><span>Drop files or click to upload</span><span className="text-xs text-muted-foreground">PDF, DOCX, XLSX, CSV, TXT, PNG, JPG · 20 MB per file</span>
@@ -120,11 +118,10 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
             <div className="min-w-0 flex-1"><p className="truncate">{f.name}</p><p className={f.status === "error" ? "break-words text-xs text-destructive" : "text-xs text-muted-foreground"}>{f.status === "checking" ? "Checking access…" : f.status === "ready" ? "Verified · readable" : f.error}</p></div>
             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label={`Discard ${f.name}`} disabled={verifiedFiles.some((item) => item.status === "checking")} onClick={() => setVerifiedFiles((prev) => prev.filter((_, index) => index !== i))}><X className="h-3 w-3" /></Button>
           </div>)}</div>
-        </> : <><Textarea aria-label={dialog === "links" ? "Web links" : "Topics to follow"} value={input} onChange={(e) => { setInput(e.target.value); setTopicError(""); }} onKeyDown={(e) => dialog === "topics" && listKeyDown(e, setInput)} className={dialog === "topics" ? "min-h-[320px]" : "min-h-[100px]"} placeholder={dialog === "links" ? "https://www.bbc.co.uk/bitesize/…" : "1. Forces and motion\n2. Energy transfers\n3. Electricity"} />
-          {dialog === "links" && <p role="status" className="text-sm text-destructive">Website verification is unavailable until a web access service is connected. Links cannot be inserted yet.</p>}
+        </> : <><Textarea aria-label="Topics to follow" value={input} onChange={(e) => { setInput(e.target.value); setTopicError(""); }} onKeyDown={(e) => dialog === "topics" && listKeyDown(e, setInput)} className="min-h-[320px]" placeholder={"1. Forces and motion\n2. Energy transfers\n3. Electricity"} />
           {topicError && <p role="alert" className="text-sm text-destructive">{topicError}</p>}
         </>}
-        <DialogFooter><Button disabled={dialog === "links" || (dialog === "files" ? !verifiedFiles.length || verifiedFiles.some((f) => f.status !== "ready") : !input.trim())} onClick={() => {
+        <DialogFooter><Button disabled={(dialog === "files" ? !verifiedFiles.length || verifiedFiles.some((f) => f.status !== "ready") : !input.trim())} onClick={() => {
           if (dialog === "topics") insertTopics();
           else if (dialog === "files") { add(verifiedFiles.map((f) => ({ kind: "file", name: f.name, text: f.text }))); openDialog(null); }
         }}>Insert</Button></DialogFooter>
