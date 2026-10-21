@@ -1,8 +1,8 @@
 # CanWinBuddy
 
-> AI quiz generator that turns any text, document, or image into validated multiple-choice questions and exports them to Blooket, Gimkit, Gimkit 2, and Kahoot.
+> AI study tool that turns any text, document, or image into validated quizzes and curriculum-aware worksheets, and exports to Blooket, Gimkit, Gimkit 2, and Kahoot.
 
-CanWinBuddy uses AI to generate quiz questions and validates every question against the original source material before saving. Users can play sets in-app or copy/export them in the exact format required by popular quiz platforms.
+CanWinBuddy uses AI to generate quiz questions and exam-style worksheets matched to subject, age, difficulty and curriculum, and validates every question against the original source material before saving. Users can play sets in-app or copy/export them in the exact format required by popular quiz platforms.
 
 ## Pages
 

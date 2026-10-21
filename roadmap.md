@@ -1,11 +1,11 @@
-# Current tasks
-- [ ] Unify Notes Space with verified files, topics and compact pasted-note bubbles.
-- [ ] Add source-removal confirmation preference and verify drafts/interactions.
-- [x] Clear AI Text Helper inputs/output once a quiz is generated.
-- [x] Move Create Worksheet to bottom-left beside Next.
-- [x] Support up to 100 questions everywhere.
-- [x] Keep full Generate page state (text, settings, step) until a quiz is generated or tab closes.
-- [x] Rename difficulty labels to Simple/Average/Difficult; confirm system defaults.
-- [x] Replace Generate's For selector with an optional Age input limited to 7–25.
-- [x] Add a textless worksheet switch between Topics to follow and Source Text while preserving both.
-- [x] Move the switch to Notes (Source Text first), preserve both inputs, and replace worksheet inputs with the requested message.
+# Roadmap
+
+## Done
+- [x] Compact Notes Space: unified editor, "+" menu (files, topics), source bubbles with confirm-remove, compact paste bubbles (≥300 chars) with side editor
+- [x] Final polish: real Guide page (accordion, 10 sections, Start generating), account deletion now removes worksheets + quiz results, refreshed llms.txt and Generate/Export descriptions, added Malay language
+- [x] Quiz variety add-on: question style mix in generation and review prompts
+
+## Open
+- [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
+- [ ] Worksheet file uploads, share links, dashboard worksheet stats, flashcards, Anki/Quizlet export, PDF math rendering — proposed improvements awaiting user pick
+- [ ] One security finding left open (user scoped the fix to a single finding)

@@ -14,6 +14,7 @@ export const APP_LANGUAGES = [
   "Italian",
   "Japanese",
   "Korean",
+  "Malay",
   "Polish",
   "Portuguese",
   "Russian",

@@ -10,7 +10,9 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     await supabaseAdmin.from("quiz_group_items").delete().eq("user_id", userId);
     await supabaseAdmin.from("quiz_groups").delete().eq("user_id", userId);
     await supabaseAdmin.from("quiz_shares").delete().eq("user_id", userId);
+    await supabaseAdmin.from("quiz_results").delete().eq("user_id", userId);
     await supabaseAdmin.from("quiz_sets").delete().eq("user_id", userId);
+    await supabaseAdmin.from("worksheets").delete().eq("user_id", userId);
     await supabaseAdmin.from("profiles").delete().eq("id", userId);
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);

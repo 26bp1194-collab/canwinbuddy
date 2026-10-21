@@ -56,9 +56,9 @@ export const Route = createFileRoute("/_authenticated/generate")({
   head: () => ({
     meta: [
       { title: "Generate Quiz Questions — CanWinBuddy" },
-      { name: "description", content: "Paste text or upload PDFs, docs, spreadsheets, or images. AI generates and validates quiz questions against your source." },
+      { name: "description", content: "Paste text or upload files. AI generates curriculum-aware quiz questions and worksheets, validated against your source." },
       { property: "og:title", content: "Generate Quiz Questions — CanWinBuddy" },
-      { property: "og:description", content: "Turn any document into validated quiz questions in seconds." },
+      { property: "og:description", content: "Turn any document into validated, curriculum-aware quiz questions and worksheets in seconds." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/generate" },
