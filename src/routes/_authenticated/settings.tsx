@@ -427,7 +427,7 @@ function SettingsPage() {
             <Trash2 className="h-4 w-4 shrink-0 text-destructive" /> {t("Delete account")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("Permanently delete your account and every quiz, group and share you made. Click twice to confirm — this cannot be undone.")}
+            {t("Permanently delete your account and every quiz, worksheet, group and share you made. Click twice to confirm — this cannot be undone.")}
           </p>
           <Button
             variant={confirmDelete ? "destructive" : "secondary"}
