@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles, MoreHorizontal, Square } from "lucide-react";
+import { Copy, Check, ArrowLeft, Play, Download, History, Loader2, Clock, HelpCircle, Send, Wand2, Share2, FileText, Sparkles, MoreHorizontal, Square, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -279,9 +279,14 @@ function ExportPage() {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
+          <div className="grid grid-cols-5 gap-2 sm:flex sm:flex-wrap">
             <Button onClick={() => setPlaying(true)}>
               <Play className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Play")}</span>
+            </Button>
+            <Button variant="secondary" asChild aria-label={t("Flashcards")}>
+              <Link to="/flashcards/$id" params={{ id }}>
+                <Layers className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("Flashcards")}</span>
+              </Link>
             </Button>
             <Button variant="secondary" onClick={() => setResultsOpen(true)} aria-label={t("Results history")}>
               <History className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("History")}</span>
