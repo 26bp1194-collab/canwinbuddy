@@ -51,7 +51,7 @@ function FlashcardsPage() {
 
   const all: Card[] = useMemo(() => {
     const qs = (data?.questions as unknown as Question[]) ?? [];
-    return qs.map((q, i) => ({ i, q: q.question, a: q.choices?.[q.correctIndex] ?? "" }));
+    return qs.map((q, i) => ({ i, q: q.question, a: getCorrectIndexes(q).map((c) => q.choices[c]).join("\n") }));
   }, [data]);
 
   const [pool, setPool] = useState<Card[]>([]);

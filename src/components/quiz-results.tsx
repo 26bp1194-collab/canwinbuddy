@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/lib/i18n";
-import type { ResultDetail } from "@/components/quiz-game";
+import { resultTexts, type ResultDetail } from "@/components/quiz-game";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -112,11 +112,11 @@ export function QuizResultsDialog({
                       <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
                     )}
                     <span>
-                      {t("You answered")}: <span className="text-foreground">{r.choices?.[r.chosenIndex]}</span>
+                      {t("You answered")}: <span className="text-foreground">{resultTexts(r).chosen.join(", ")}</span>
                       {!r.correct && (
                         <>
                           {" · "}
-                          {t("Correct")}: <span className="text-foreground">{r.choices?.[r.correctIndex]}</span>
+                          {t("Correct")}: <span className="text-foreground">{resultTexts(r).correct.join(", ")}</span>
                         </>
                       )}
                     </span>
