@@ -344,6 +344,8 @@ STEMS:
 - Use the stem opening assigned in each question plan. Do not start most questions with "Which of the following".
 - Use the assigned correct-answer position (correctIndex) exactly.
 
+${STYLE_MIX}
+
  ${SELF_CONTAINED}
  ${TERM_CONSISTENCY}
  ${MATH_RULES}${guidanceBlock(guidance)}${list("ANALYSED TOPICS", analysis?.topics)}${list("KEY FACTS FROM THE NOTES", analysis?.keyFacts)}${list("FORMULAS / WORKED EXAMPLES / DATA IN THE NOTES", analysis?.calculations)}${list("THE SOURCE'S OWN PRACTICE QUESTIONS (use as a guide for style and difficulty)", analysis?.sourceQuestions)}${list("EXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms)", analysis?.namedTerms)}`;
