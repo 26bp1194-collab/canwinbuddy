@@ -8,11 +8,12 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { translateQuestions, explainAnswer, editQuestions, type Question } from "@/lib/ai.functions";
-import { downloadForPlatform, formatFor, toRows, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
+import { downloadForPlatform, formatFor, toRows, multiExcludedNotice, PLATFORM_COLUMNS, PLATFORM_HEADERS, PLATFORM_LABELS, type Platform } from "@/lib/export";
 import { formatMs, getQuizDefaults, getTimings, setGeneratePrefill, type QuizSettingsSnapshot, type StepTiming } from "@/lib/prefs";
 import { subjectText, audienceText } from "@/lib/quiz-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { getCorrectIndexes } from "@/lib/question-utils";
 import { QuizGame } from "@/components/quiz-game";
 import { QuizResultsDialog } from "@/components/quiz-results";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -88,7 +89,9 @@ function ExportPage() {
   const original = (data?.questions as unknown as Question[]) ?? [];
   const questions = language === "English" ? original : (translated[language] ?? original);
   const text = useMemo(() => formatFor(platform, questions), [platform, questions]);
-  const rows = useMemo(() => toRows(platform, questions), [platform, questions]);
+  /* One entry per question so row numbers and selection stay aligned; null = left out of this export */
+  const rows = useMemo(() => questions.map((q) => toRows(platform, [q])[0] ?? null), [platform, questions]);
+  const notice = useMemo(() => multiExcludedNotice(platform, questions), [platform, questions]);
 
   useEffect(() => {
     const d = getQuizDefaults();
@@ -121,12 +124,14 @@ function ExportPage() {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     toast.success(`${t("Copied")} ${PLATFORM_LABELS[platform]}`);
+    if (notice) toast.warning(t(notice));
     setTimeout(() => setCopied(false), 1600);
   };
 
   const download = () => {
     const ext = downloadForPlatform(platform, questions, data?.title ?? "questions");
     toast.success(`${t("Downloaded")} ${PLATFORM_LABELS[platform]} .${ext}`);
+    if (notice) toast.warning(t(notice));
   };
 
   const share = async () => {
@@ -323,6 +328,7 @@ function ExportPage() {
 
         <p className="mt-5 text-xs uppercase tracking-wider text-muted-foreground">{t("Format")}</p>
         <p className="mt-1 break-words text-xs text-muted-foreground sm:text-sm">{PLATFORM_HEADERS[platform]}</p>
+        {notice && <p className="mt-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">{t(notice)}</p>}
 
         <pre className="mt-4 max-h-[400px] overflow-auto rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words sm:max-h-[560px] sm:p-4">
 {text}
@@ -372,9 +378,15 @@ function ExportPage() {
                     />
                   </td>
                   <td className="border-b border-border px-3 py-2 text-muted-foreground tabular-nums">{i + 1}</td>
-                  {r.map((cell, j) => (
-                    <td key={j} className="border-b border-border px-3 py-2 align-top">{cell}</td>
-                  ))}
+                  {r ? (
+                    r.map((cell, j) => (
+                      <td key={j} className="border-b border-border px-3 py-2 align-top">{cell}</td>
+                    ))
+                  ) : (
+                    <td colSpan={PLATFORM_COLUMNS[platform].length} className="border-b border-border px-3 py-2 align-top text-muted-foreground">
+                      <span className="text-foreground">{questions[i]?.question}</span> — {t("Not included: this export uses one correct answer.")}
+                    </td>
+                  )}
                   <td className="border-b border-border px-3 py-2 align-top">
                     <Button size="sm" variant="secondary" onClick={() => setExplainIndex(i)}>
                       <HelpCircle className="mr-1.5 h-3.5 w-3.5" /> {t("Explain")}
@@ -630,7 +642,7 @@ function ExplainDialog({
         {question && (
           <div className="space-y-4">
             <p className="rounded-xl border border-success/40 bg-success/10 px-3 py-2 text-sm font-medium">
-              {String.fromCharCode(65 + question.correctIndex)}. {question.choices[question.correctIndex]}
+              {getCorrectIndexes(question).map((ci) => `${String.fromCharCode(65 + ci)}. ${question.choices[ci]}`).join("  ·  ")}
             </p>
 
             {loading ? (
