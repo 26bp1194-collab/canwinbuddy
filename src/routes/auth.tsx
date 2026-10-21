@@ -19,6 +19,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Sign in or create a CanWinBuddy account to generate AI quiz questions and export them to Blooket, Gimkit, and Kahoot." },
       { property: "og:title", content: "Sign in — CanWinBuddy AI Quiz Generator" },
       { property: "og:description", content: "Access your CanWinBuddy account to generate and export validated quiz questions." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/auth" },
     ],
     links: [{ rel: "canonical", href: "/auth" }],

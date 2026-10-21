@@ -33,6 +33,8 @@ export const Route = createFileRoute("/_authenticated/export/$id")({
       { name: "description", content: "Copy your curriculum-aware generated questions and worksheets in the exact format required by Blooket, Gimkit, Gimkit 2, or Kahoot." },
       { property: "og:title", content: "Export Quiz Questions — CanWinBuddy" },
       { property: "og:description", content: "Copy curriculum-aware questions in Blooket, Gimkit, or Kahoot format." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: `/export/${params.id}` },
     ],
     links: [{ rel: "canonical", href: `/export/${params.id}` }],

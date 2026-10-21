@@ -27,6 +27,8 @@ export const Route = createFileRoute("/_authenticated/guide")({
       { name: "description", content: "Learn how to turn your notes into quizzes and worksheets with CanWinBuddy." },
       { property: "og:title", content: "Guide — CanWinBuddy" },
       { property: "og:description", content: "Learn how to turn your notes into quizzes and worksheets with CanWinBuddy." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/guide" },
     ],
     links: [{ rel: "canonical", href: "/guide" }],

@@ -44,6 +44,8 @@ export const Route = createFileRoute("/_authenticated/history")({
       { name: "description", content: "Browse every quiz set you've generated. Group them into study folders, reopen a set to play, copy, or export it." },
       { property: "og:title", content: "Quiz History — CanWinBuddy" },
       { property: "og:description", content: "Every quiz set you've generated, grouped and ready to reopen." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/history" },
     ],
     links: [{ rel: "canonical", href: "/history" }],
