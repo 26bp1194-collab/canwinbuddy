@@ -17,6 +17,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
       { name: "description", content: "Overview of your quiz generation activity: total sets, questions generated, and recent quiz history." },
       { property: "og:title", content: "Your Quiz Dashboard — CanWinBuddy" },
       { property: "og:description", content: "See your quiz generation stats and jump into recent quiz sets." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { property: "og:url", content: "/dashboard" },
     ],
     links: [{ rel: "canonical", href: "/dashboard" }],
