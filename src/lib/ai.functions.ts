@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
 import { generateChatCompletion, GatewayError } from "@lovable.dev/ai-gateway";
-import { splitSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, completeReviewIndexes } from "./generation-context";
+import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, partitionReviews } from "./generation-context";
 
 const QuestionSchema = z
   .object({
@@ -319,8 +319,8 @@ export const analyzeSource = createServerFn({ method: "POST" })
 - Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"namedTerms":[string],"concepts":[string],"objectives":[string],"keyTerms":[string],"calculations":[string],"sourceQuestions":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics actually present in the notes, spread across the WHOLE text.
-- "keyFacts": short factual bullets grounded ONLY in the notes (max 60).
-- "summaries": short summaries (max 12) of each testable section, in reading order.
+- "keyFacts": compact factual bullets grounded ONLY in the notes (max 60), one fact per bullet; no explanation or repeated facts.
+- "summaries": one short sentence per testable section (max 12), in reading order; do not restate the keyFacts list.
 - "namedTerms": up to 30 defined named concepts/terms copied with exact singular spelling and capitalisation from their FIRST occurrence.
 - "concepts": every DISTINCT testable concept in the notes (max 100), one short phrase each. Repeated mentions of the same fact are ONE concept. Each formula/worked example/data table counts as one concept.
 - "objectives": items from any Objectives / Learning outcomes / Key points list in the notes, verbatim-ish (empty if none).
@@ -329,6 +329,7 @@ export const analyzeSource = createServerFn({ method: "POST" })
 - "sourceQuestions": end-of-section / practice questions that appear in the notes, copied (max 10). Empty if none.
 - "coverageNotes": 1-2 sentences on how dense/testable the material is.
 - "maxQuestions": equal to the number of items in "concepts".
+- Keep concept/topic labels brief; avoid repeating the same label across concepts, topics and keyTerms unless needed. Preserve every distinct testable concept, exact defined terms, objectives, formulas and numeric data; brevity must not remove coverage.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
     const chunks = splitSource(sourceText);
@@ -509,7 +510,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const { sourceText, count, difficulty, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
-    const evidenceSections = splitSource(sourceText, 2400, 300);
+    const evidenceSections = splitEvidenceSource(sourceText);
     const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance, curriculum, hasMathContext(sourceText, guidance, analysis?.calculations));
 
     const pending: Slot[] = buildBlueprint(count, difficulty, analysis, spec);
@@ -638,11 +639,11 @@ function mustCoverList(analysis?: Analysis | null): string[] {
 }
 
 async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, indexes = questions.map((_, i) => i)) {
-  const sections = splitSource(sourceText, 2400, 300);
+  const sections = splitEvidenceSource(sourceText);
   const groups: number[][] = [];
-  for (let i = 0; i < indexes.length; i += 15) groups.push(indexes.slice(i, i + 15));
+  for (let i = 0; i < indexes.length; i += 8) groups.push(indexes.slice(i, i + 8));
   const overview = questions.map((q, index) => ({ index, question: q.question, answers: getCorrectIndexes(q).map((i) => q.choices[i]) }));
-  const results = await pool(groups, 3, async (group) => {
+  const check = async (group: number[]) => {
     const evidence = selectEvidence(sections, group.map((i) => questions[i].sourceQuote));
     const user = `SOURCE EXCERPTS (verbatim):\n"""${evidence}"""\n\nSET OVERVIEW:\n${JSON.stringify(overview)}\n\nQUESTIONS TO REVIEW:\n${JSON.stringify(group.map((index) => ({ index, ...questions[index] })))}`;
     const raw = await callAI([
@@ -650,10 +651,23 @@ async function reviewBatch(sourceText: string, questions: Question[], difficulty
       { role: "user", content: user },
     ]);
     const parsed = ReviewSchema.parse(JSON.parse(raw));
-    if (!completeReviewIndexes(parsed.reviews.map((r) => r.index), group)) throw new Error("The AI review was incomplete.");
-    return parsed.reviews;
+    return partitionReviews(parsed.reviews, group);
+  };
+  const results = await pool(groups, 3, async (group) => {
+    // Recover omitted verdicts once, without replaying a failed/unknown AI request.
+    let kept: z.infer<typeof ReviewSchema>["reviews"] = [];
+    try {
+      const first = await check(group);
+      kept = first.reviews;
+      if (!first.missing.length) return { reviews: kept, incomplete: false };
+      const followUp = await check(first.missing);
+      return { reviews: [...kept, ...followUp.reviews], incomplete: followUp.missing.length > 0 };
+    } catch {
+      // A failure in one group must not discard successful verdicts in other groups.
+      return { reviews: kept, incomplete: true };
+    }
   });
-  return results.flat();
+  return { reviews: results.flatMap((r) => r.reviews), incomplete: results.some((r) => r.incomplete) };
 }
 
 /** Deterministic set-level checks the reviewer may miss. */
@@ -693,7 +707,7 @@ async function regenerateOne(
 ): Promise<Question | null> {
   const used = new Set(accepted.map((q) => openerOf(q.question)));
   const duplicate = issues.some((issue) => /duplicat|same concept|different concept|objective/i.test(issue));
-  const evidence = duplicate ? sourceText : selectEvidence(splitSource(sourceText, 2400, 300), [failed.sourceQuote]);
+  const evidence = duplicate ? sourceText : selectEvidence(splitEvidenceSource(sourceText), [failed.sourceQuote]);
   const user = `Write ONE replacement quiz question.
 
 The following question FAILED review:
@@ -768,8 +782,9 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       const local = localIssues(current);
       const toReview = dirty.filter((i) => !local.has(i));
       try {
-        const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview);
-        reviews.forEach((r) => verdict.set(r.index, r));
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview);
+        checked.reviews.forEach((r) => verdict.set(r.index, r));
+        if (checked.incomplete) { reviewIncomplete = true; break; }
       } catch {
         reviewIncomplete = true;
         break; // Preserve partial work, but never claim an incomplete review passed.
@@ -822,8 +837,9 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     // Recheck the last repairs too; the round limit must not leave replacements unchecked.
     if (!reviewIncomplete && regenerated > 0 && dirty.length && Date.now() < deadline) {
       try {
-        const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty);
-        reviews.forEach((r) => verdict.set(r.index, r));
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty);
+        checked.reviews.forEach((r) => verdict.set(r.index, r));
+        reviewIncomplete = checked.incomplete;
       } catch { reviewIncomplete = true; }
     }
     const finalLocal = localIssues(current);
