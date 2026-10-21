@@ -7,6 +7,7 @@
 - [x] Quiz variety add-on: question style mix in generation and review prompts
 
 ## Open
+- [ ] Fix overlap duplication, streamline source analysis, and retain partial reviews with bounded missing-index checks; verify a 9,900-character quiz
 - [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
 - [ ] Worksheet file uploads, share links, dashboard worksheet stats, flashcards, Anki/Quizlet export, PDF math rendering — proposed improvements awaiting user pick
 - [ ] One security finding left open (user scoped the fix to a single finding)
