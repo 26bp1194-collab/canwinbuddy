@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { Question } from "./ai.functions";
+import { getCorrectIndexes, isMultiAnswer } from "./question-utils";
 
 export type Platform = "blooket" | "gimkit" | "gimkit2" | "kahoot";
 
@@ -29,11 +30,11 @@ export const PLATFORM_COLUMNS: Record<Platform, string[]> = {
   ],
   gimkit2: ["Question", "Correct Answer"],
   kahoot: [
-    "Question (max 120)",
-    "Answer 1 (max 75)",
-    "Answer 2 (max 75)",
-    "Answer 3 (max 75)",
-    "Answer 4 (max 75)",
+    "Question (max 95)",
+    "Answer 1 (max 60)",
+    "Answer 2 (max 60)",
+    "Answer 3 (max 60)",
+    "Answer 4 (max 60)",
     "Time Limit",
     "Correct Answer(s)",
   ],
@@ -55,33 +56,52 @@ export function toStrippedClipboard(questions: Question[]): string {
   return questions.map((q) => [q.question, ...q.choices].join("\n")).join("\n\n");
 }
 
+/** Blooket and Gimkit exports take one correct answer, so two-answer questions are left out there. */
+export function supportsMultiAnswer(platform: Platform) {
+  return platform === "kahoot";
+}
+
+/** Questions that a platform's export can include (and whose answers are valid). */
+export function exportableQuestions(platform: Platform, questions: Question[]): Question[] {
+  return questions.filter((q) => getCorrectIndexes(q).length > 0 && (supportsMultiAnswer(platform) || !isMultiAnswer(q)));
+}
+
+/** Notice for left-out two-answer questions, or null when none are left out. */
+export function multiExcludedNotice(platform: Platform, questions: Question[]): string | null {
+  if (supportsMultiAnswer(platform)) return null;
+  const n = questions.filter(isMultiAnswer).length;
+  return n ? `${n} multi-answer question(s) were not included because Blooket and Gimkit exports use one correct answer.` : null;
+}
+
 // Build platform-specific rows (each inner array = one spreadsheet row of cells).
+// Unused answer columns stay blank; two-answer questions are skipped where the platform takes only one.
 export function toRows(platform: Platform, questions: Question[], timeLimit = 20): string[][] {
+  const qs = exportableQuestions(platform, questions);
   switch (platform) {
     case "blooket":
-      return questions.map((q) => {
+      return qs.map((q) => {
         const [a1, a2, a3, a4] = q.choices;
-        return [q.question, a1, a2, a3 ?? "", a4 ?? "", String(timeLimit), String(q.correctIndex + 1)];
+        return [q.question, a1 ?? "", a2 ?? "", a3 ?? "", a4 ?? "", String(timeLimit), String(getCorrectIndexes(q)[0] + 1)];
       });
     case "gimkit":
-      return questions.map((q) => {
-        const correct = q.choices[q.correctIndex];
-        const incorrect = q.choices.filter((_, i) => i !== q.correctIndex);
-        return [q.question, correct, incorrect[0] ?? "", incorrect[1] ?? "", incorrect[2] ?? ""];
+      return qs.map((q) => {
+        const c = getCorrectIndexes(q)[0];
+        const incorrect = q.choices.filter((_, i) => i !== c);
+        return [q.question, q.choices[c], incorrect[0] ?? "", incorrect[1] ?? "", incorrect[2] ?? ""];
       });
     case "gimkit2":
-      return questions.map((q) => [q.question, q.choices[q.correctIndex]]);
+      return qs.map((q) => [q.question, q.choices[getCorrectIndexes(q)[0]]]);
     case "kahoot":
-      return questions.map((q) => {
+      return qs.map((q) => {
         const [a1, a2, a3, a4] = q.choices;
         return [
-          truncate(q.question, 120),
-          truncate(a1 ?? "", 75),
-          truncate(a2 ?? "", 75),
-          truncate(a3 ?? "", 75),
-          truncate(a4 ?? "", 75),
+          truncate(q.question, 95),
+          truncate(a1 ?? "", 60),
+          truncate(a2 ?? "", 60),
+          a3 ? truncate(a3, 60) : "",
+          a4 ? truncate(a4, 60) : "",
           String(timeLimit),
-          String(q.correctIndex + 1),
+          getCorrectIndexes(q).map((i) => i + 1).join(","),
         ];
       });
   }

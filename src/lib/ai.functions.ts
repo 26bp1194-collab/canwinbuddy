@@ -1,13 +1,28 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
 
-const QuestionSchema = z.object({
-  question: z.string(),
-  choices: z.array(z.string()).length(4),
-  correctIndex: z.number().int().min(0).max(3),
-  sourceQuote: z.string(),
-});
+const QuestionSchema = z
+  .object({
+    question: z.string(),
+    /* 2 to 4 options (older saved quizzes always have 4) */
+    choices: z.array(z.string()).min(2).max(4),
+    correctIndex: z.number().int().min(0).max(3),
+    /* Optional: both answers of a "Select TWO" question. Missing = single answer (correctIndex). */
+    correctIndexes: z.array(z.number().int().min(0).max(3)).min(1).max(2).optional(),
+    sourceQuote: z.string(),
+  })
+  .superRefine((q, ctx) => {
+    if (q.correctIndex >= q.choices.length) ctx.addIssue({ code: "custom", message: "correctIndex out of range" });
+    if (q.correctIndexes) {
+      const set = new Set(q.correctIndexes);
+      if (set.size !== q.correctIndexes.length || q.correctIndexes.some((i) => i >= q.choices.length))
+        ctx.addIssue({ code: "custom", message: "invalid correctIndexes" });
+      if (q.correctIndexes.length === 2 && q.choices.length !== 4)
+        ctx.addIssue({ code: "custom", message: "two-answer questions need 4 options" });
+    }
+  });
 
 export type Question = z.infer<typeof QuestionSchema>;
 
@@ -28,7 +43,7 @@ function styleBlock(spec?: Partial<StyleSpec> | null) {
   if (!spec) return "";
   if (spec.mode !== "advanced") {
     return spec.shortQA
-      ? `\n\nSHORT Q&A MODE: keep every question stem under 15 words and every choice under 6 words. Stay clear and still fully self-contained.`
+      ? `\n\nSHORT Q&A MODE: keep every question stem under 15 words and at most 95 characters, and every choice under 6 words and at most 60 characters (Kahoot limits). Stay clear and still fully self-contained.`
       : "";
   }
   const s = { questionLength: 3, answerLength: 3, complexity: 3, obscurity: 3, ...spec };
@@ -218,10 +233,38 @@ function stemCap(n: number) {
 
 /** Move the correct option to a target position (keeps option order otherwise). */
 function placeCorrect(q: Question, target: number): Question {
-  if (q.correctIndex === target) return q;
+  const idx = getCorrectIndexes(q);
+  const from = idx[0] ?? 0;
+  const to = target % q.choices.length;
+  if (from === to) return normalizeAnswers(q);
   const choices = [...q.choices];
-  [choices[q.correctIndex], choices[target]] = [choices[target], choices[q.correctIndex]];
-  return { ...q, choices, correctIndex: target };
+  [choices[from], choices[to]] = [choices[to], choices[from]];
+  const swap = (i: number) => (i === from ? to : i === to ? from : i);
+  return normalizeAnswers({ ...q, choices, correctIndex: swap(from), correctIndexes: idx.map(swap) });
+}
+
+const ALL_NONE = /\b(all|none|both|neither) of the above\b/i;
+const SELECT_TWO = /select\s+two/i;
+
+/** Local structure checks: valid option count, no duplicate options, multi-answer rules. */
+function validStructure(q: Question, allowMulti: boolean): boolean {
+  const norm = q.choices.map((c) => normalize(c));
+  if (norm.some((c) => !c) || new Set(norm).size !== norm.length) return false;
+  if (q.choices.some((c) => ALL_NONE.test(c)) || ALL_NONE.test(q.question)) return false;
+  const multi = getCorrectIndexes(q).length > 1;
+  if (multi && (!allowMulti || q.choices.length !== 4 || !SELECT_TWO.test(q.question))) return false;
+  if (!multi && SELECT_TWO.test(q.question)) return false;
+  return true;
+}
+
+/** Prompt block describing option counts and two-answer questions for a set of this size. */
+function optionRules(count: number) {
+  const small = count < 8;
+  return `OPTION COUNTS AND MULTI-ANSWER (critical):
+- Most questions have exactly 4 options. About 20% may have 3 options, and true-or-false style questions ("True or false: ...") may have exactly 2 options: "True" and "False". Use 2 or 3 options ONLY where it is natural; never pad with silly options.${small ? "\n- This set has fewer than 8 questions: use AT MOST ONE question with 2 or 3 options." : ""}
+${small ? '- This set has fewer than 8 questions: NO multi-answer questions. Every question has exactly one correct answer and no "correctIndexes".' : '- About 10-15% of the questions may have exactly 2 correct answers out of 4 options. Their stem MUST end with "Select TWO answers." Set "correctIndexes" to both correct indexes and "correctIndex" to the first of them. Both answers must be fully supported by the source. Every other question has exactly one correct answer and no "correctIndexes".'}
+- Never use "all of the above", "none of the above", "both of the above" or "neither of the above".
+- No two options may have the same value or meaning.`;
 }
 
 /* ---------------- 1. Analyze ---------------- */
@@ -303,7 +346,7 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
 
 const STYLE_MIX = `QUESTION STYLE MIX: plan a mix of styles across the whole set before writing. Use only styles the source material supports, and never invent facts to fit a style. Styles to draw from:
 1. Direct recall ("What is...", "Which term...").
-2. Statement check: "Which statement is TRUE?", "Which statement is NOT true?", with four full statements as the options (this is how to do true/false inside 4 options).
+2. Statement check: "Which statement is TRUE?", "Which statement is NOT true?", with full statements as the options, or a short "True or false: ..." question with exactly 2 options (True, False).
 3. Fill in the blank: a sentence with ____ and four candidate words or phrases.
 4. Definition to term, and term to definition (the stem gives one, the options give the other).
 5. Scenario or application: a short real-life situation, then "Which concept applies?" or "What happens next?"
@@ -326,9 +369,9 @@ Rules:
 - For maths subjects the source-only rule is relaxed: when the notes only give a topic or method, you may write original practice problems using that topic and method (sourceQuote then quotes the topic/method text). Do not use facts outside the topic.
 - ACCURACY IS CRITICAL. Work out each answer step by step before writing the options. Exactly one option must equal the correct value.
 - Wrong options come from common mistakes (wrong sign, wrong operation, forgetting to carry, wrong formula, unit slip), never random numbers.
-- No two options may be equal in value even if written differently (0.5 and 1/2). Keep format, units and rounding consistent across all 4 options. State required rounding or units in the question when they matter.
+- No two options may be equal in value even if written differently (0.5 and 1/2). Keep format, units and rounding consistent across all options. State required rounding or units in the question when they matter.
 - Write all maths in plain text with Unicode symbols only: + − × ÷ = ≠ ≤ ≥ ² ³ √ π, fractions as 3/4. NEVER use LaTeX, dollar signs, backslashes or markdown.
-- Keep any Short Q&A / Kahoot length limits (questions ≤120 characters, options ≤75).`;
+- Keep any Short Q&A / Kahoot length limits (questions ≤95 characters, options ≤60).`;
 
 function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
   const list = (title: string, items?: string[]) => (items?.length ? `\n\n${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : "");
@@ -338,9 +381,9 @@ function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: 
 ${levelBlock(difficulty, spec, curriculum)}
 
 RULES:
-- Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
+- Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[2 to 4 strings],"correctIndex":number,"correctIndexes"?:[number,number],"sourceQuote":string}]}
 - "sourceQuote" MUST be a verbatim substring of the source (6-30 words) supporting the answer. For calculation/application questions quote the formula, worked example or data used — the final answer itself does NOT need to appear in the source.
-- Exactly 4 choices, exactly one clearly correct.
+- Usually 4 choices (see OPTION COUNTS below). Exactly one clearly correct answer, except "Select TWO answers." questions which have exactly two.
 - Facts, formulas and data come ONLY from the source. Calculation/application answers may be derived from them, and must be worked out correctly.
 
 DISTRACTORS:
@@ -348,12 +391,12 @@ DISTRACTORS:
 - Never options from an unrelated part of the source, silly options, options that contradict the stem, or two wrong options that mean the same thing.
 
 FORMATTING:
-- All 4 options share capitalisation, style, grammar and similar length; the correct option must never stand out. Don't capitalise ordinary terms (mass, weight) mid-sentence.
+- All options share capitalisation, style, grammar and similar length; the correct option must never stand out. Don't capitalise ordinary terms (mass, weight) mid-sentence.
 
 STEMS:
 - Never write "according to the text/source/notes/definition". Every question stands alone.
 - Use the stem opening assigned in each question plan. Do not start most questions with "Which of the following".
-- Use the assigned correct-answer position (correctIndex) exactly.
+- Use the assigned correct-answer position (correctIndex) exactly. For "Select TWO" questions it is the position of the first correct answer.
 
 ${STYLE_MIX}
 
@@ -473,7 +516,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
             `Question ${i + 1}: concept = "${s.concept}"; type = ${s.type}${s.type === "calculation" ? " (must require calculating/applying the formula or data)" : ""}; start the stem with "${s.opener}" (adapt grammar if needed); correctIndex = ${s.answer}.`,
         )
         .join("\n");
-      const userPrompt = `Generate exactly ${need} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nPLAN:\n${plan}${
+      const userPrompt = `Generate exactly ${need} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
         avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
       let raw: string;
@@ -502,6 +545,10 @@ export const generateQuestions = createServerFn({ method: "POST" })
         const p = QuestionSchema.safeParse(items[k]);
         if (!p.success) continue;
         const q = placeCorrect(p.data, slots[k].answer);
+        if (!validStructure(q, count >= 8)) continue;
+        const isMulti = getCorrectIndexes(q).length > 1;
+        if (isMulti && validated.filter((a) => getCorrectIndexes(a).length > 1).length >= Math.ceil(count * 0.15)) continue;
+        if (q.choices.length < 4 && validated.filter((a) => a.choices.length < 4).length >= (count < 8 ? 1 : Math.ceil(count * 0.25))) continue;
         const dedupKey = q.question.toLowerCase().trim();
         if (seen.has(dedupKey)) continue;
         if (REFERS_TO_SOURCE.test(q.question)) continue;
@@ -555,6 +602,7 @@ Check each question, in this order:
 6. SET-LEVEL (compare the whole set): fail the later question when two test the same concept/fact (even reworded); fail questions whose stem opening (first 2-3 words) is used by more than 3 questions in the set${analysis?.objectives?.length ? "; when objectives or key terms below are not covered by any question while another concept is tested twice, fail one of the repeats and say which objective to test instead" : ""}.
 7. TERM CONSISTENCY: fail any question or option that pluralizes, abbreviates or respells a source-defined term; include the exact source term in the issue.
 8. STYLE VARIETY (compare the whole set): if one question style dominates (more than about 40% of a set of 8+, or fewer than 2-3 styles in a smaller set) or several stems repeat the same opening, fail the weakest of those questions and say which other style to rewrite it into, using the same facts and keeping the correct-answer position balance.
+10. STRUCTURE: fail it if the number of correct options does not match the stem (a "Select TWO answers." stem needs exactly two correct options in "correctIndexes" out of 4; any other stem needs exactly one), if it has fewer than 2 or more than 4 options, if a 2-option question is not a natural true-or-false, if two options have the same value or meaning, or if any option is "all/none of the above".
 9. MATHS CHECK: for every calculation question, independently recompute the answer from scratch. Fail it if the result does not match the marked correct option, if two options have the same value (e.g. 0.5 and 1/2), or if it contains LaTeX, dollar signs or backslashes; give the correct value and which option/correctIndex should hold it, keeping the correct-answer position balance.
 Each issue is one short, actionable sentence. ${STYLE_MIX}
 ${MATHS_MIX}
@@ -566,7 +614,7 @@ function mustCoverList(analysis?: Analysis | null): string[] {
 }
 
 async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
-  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS (correct answer marked by correctIndex):\n${JSON.stringify(
+  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS (correct answer marked by correctIndex; "Select TWO" questions list both in correctIndexes):\n${JSON.stringify(
     questions.map((q, index) => ({ index, ...q })),
   )}`;
   const raw = await callAI([
@@ -632,6 +680,7 @@ Avoid these overused stem openings: ${[...used].slice(0, 40).join(", ") || "(non
 Do NOT duplicate any of these already-accepted questions:
 ${accepted.map((q) => `- ${q.question}`).join("\n") || "(none)"}
 
+Keep the same number of options and the same single- or two-answer structure as the failed question, unless the issues say that structure is wrong.
 Return JSON with exactly one item: {"questions":[{...}]}
 
 SOURCE:
@@ -643,7 +692,7 @@ SOURCE:
   try {
     const parsed = JSON.parse(raw);
     const p = QuestionSchema.safeParse(parsed.questions?.[0]);
-    return p.success ? p.data : null;
+    return p.success && validStructure(p.data, getCorrectIndexes(failed).length > 1 || accepted.length + 1 >= 8) ? normalizeAnswers(p.data) : null;
   } catch {
     return null;
   }
@@ -901,7 +950,7 @@ export const translateQuestions = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => TranslateInput.parse(raw))
   .handler(async ({ data }) => {
     const { questions, language } = data;
-    const system = `You translate quiz questions to ${language}. Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":number,"sourceQuote":string}]}. Preserve correctIndex exactly. Translate question, choices, and sourceQuote to ${language}. Do not add or remove items. Keep mathematical notation as Unicode symbols.`;
+    const system = `You translate quiz questions to ${language}. Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[same number of strings as the input],"correctIndex":number,"correctIndexes"?:[number,number],"sourceQuote":string}]}. Preserve correctIndex, correctIndexes and the number of choices exactly. Translate question, choices, and sourceQuote to ${language}. Do not add or remove items. Keep mathematical notation as Unicode symbols.`;
     const user = JSON.stringify({ questions });
     const raw = await callAI([
       { role: "system", content: system },
@@ -916,7 +965,12 @@ export const translateQuestions = createServerFn({ method: "POST" })
     const out: Question[] = [];
     for (let i = 0; i < questions.length; i++) {
       const p = QuestionSchema.safeParse(parsed.questions?.[i]);
-      out.push(p.success ? { ...p.data, correctIndex: questions[i].correctIndex } : questions[i]);
+      const orig = questions[i];
+      out.push(
+        p.success && p.data.choices.length === orig.choices.length
+          ? normalizeAnswers({ ...p.data, correctIndex: orig.correctIndex, correctIndexes: orig.correctIndexes })
+          : orig,
+      );
     }
     return { questions: out };
   });
@@ -939,10 +993,10 @@ export const editQuestions = createServerFn({ method: "POST" })
     const { sourceText, questions, instruction, presets, difficulty, spec } = data;
     const asks = [...presets.map((p) => `- ${p}`), instruction.trim() ? `- ${instruction.trim()}` : ""].filter(Boolean);
     const system = `You rewrite existing multiple-choice quiz questions on request.
-- Return ONLY valid JSON: {"questions":[{"question":string,"choices":[string,string,string,string],"correctIndex":0-3,"sourceQuote":string}]}
+- Return ONLY valid JSON: {"questions":[{"question":string,"choices":[2 to 4 strings],"correctIndex":number,"correctIndexes"?:[number,number],"sourceQuote":string}]}
 - Return EXACTLY ${questions.length} question(s), in the same order as the input.
 - Keep every question grounded in the provided source material; "sourceQuote" must stay a verbatim substring of the source.
-- Exactly 4 choices, one correct, plausible parallel distractors.
+- Keep each question's number of options and its single- or two-answer structure (a "Select TWO answers." question keeps 4 options and exactly two correct indexes in "correctIndexes", with "correctIndex" = the first) unless the requested change explicitly asks to change them. Plausible parallel distractors. Never "all/none of the above".
 - Baseline difficulty: ${difficulty}.
 
 ${SELF_CONTAINED}
@@ -963,11 +1017,11 @@ ${MATH_RULES}${styleBlock(spec)}`;
     const sourceNorm = normalize(sourceText);
     const out: Question[] = questions.map((original, i) => {
       const p = QuestionSchema.safeParse(parsed.questions?.[i]);
-      if (!p.success) return original;
+      if (!p.success || !validStructure(p.data, true)) return original;
       if (sourceText && !validateQuestion(p.data, sourceNorm)) {
-        return { ...p.data, sourceQuote: original.sourceQuote };
+        return normalizeAnswers({ ...p.data, sourceQuote: original.sourceQuote });
       }
-      return p.data;
+      return normalizeAnswers(p.data);
     });
     return { questions: out };
   });
@@ -988,11 +1042,11 @@ export const explainAnswer = createServerFn({ method: "POST" })
     const system = `You explain quiz answers as a short bullet list.
 - Reply with 2-4 bullet points ONLY. Each bullet starts with "• " on its own line.
 - Each bullet is one short clause, max 15 words. No intro, no closing sentence, no markdown headers.
-- Bullet 1: why the correct answer is correct. Remaining bullets: the key reason the tempting wrong options fail.
+- Bullet 1: why the correct answer is correct (for a two-answer question, why BOTH marked answers are correct). Remaining bullets: the key reason the tempting wrong options fail.
 ${MATH_RULES}`;
     const user = `QUESTION: ${q.question}
 OPTIONS:
-${q.choices.map((c, i) => `${String.fromCharCode(65 + i)}. ${c}${i === q.correctIndex ? "  <- correct" : ""}`).join("\n")}
+${q.choices.map((c, i) => `${String.fromCharCode(65 + i)}. ${c}${getCorrectIndexes(q).includes(i) ? "  <- correct" : ""}`).join("\n")}
 SUPPORTING SOURCE QUOTE: "${q.sourceQuote}"${sourceText ? `\nWIDER SOURCE (excerpt): """${sourceText.slice(0, 4000)}"""` : ""}${
       userQuestion.trim() ? `\n\nThe learner still doesn't understand and asks: "${userQuestion.trim()}" — answer this specifically, still as short bullets.` : ""
     }`;
@@ -1091,7 +1145,7 @@ export const explainWrongAnswers = createServerFn({ method: "POST" })
     const { items, sourceText } = data;
     const system = `You write one very short explanation for each quiz question a learner got wrong.
 - Return ONLY valid JSON: {"explanations":[string]} with EXACTLY ${items.length} items, in the same order.
-- Each explanation says why the correct answer is right (and, if it fits, why the chosen one is wrong).
+- Each explanation says why the correct answer is right (some questions have two correct answers, listed together) (and, if it fits, why the chosen one is wrong).
 - LENGTH: 5-20 words for a simple, everyday topic. Only for a genuinely advanced or technical topic may you use up to 45 words. Never longer.
 - Plain sentence, no bullets, no markdown, no preamble.
 ${MATH_RULES}`;

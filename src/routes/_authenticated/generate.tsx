@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw, Plus, Trash2, ArrowRight } from "lucide-react";
+import { Upload, FileText, Loader2, Sparkles, CheckCircle2, X, Wand2, Clock, SlidersHorizontal, Zap, RotateCcw, Plus, Trash2, ArrowRight, NotebookPen } from "lucide-react";
 import { toast } from "sonner";
 
 import { analyzeSource, generateQuestions, reviewAndRepair } from "@/lib/ai.functions";
@@ -44,6 +44,7 @@ import {
 
 import { AiTextHelper } from "@/components/ai-text-helper";
 import { WorksheetDialog } from "@/components/worksheet-dialog";
+import { StudyNotesDialog } from "@/components/study-notes-dialog";
 import { subjectText as wsSubjectText, curriculumText as wsCurriculumText } from "@/lib/quiz-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,6 +105,7 @@ function GeneratePage() {
   const [audiences, setAudiences] = useState<AudienceEntry[]>([{ kind: "empty" }]);
   const [instructions, setInstructions] = useState("");
   const [worksheetOpen, setWorksheetOpen] = useState(false);
+  const [studyNotesOpen, setStudyNotesOpen] = useState(false);
 
   const [stage, setStage] = useState<Stage>("input");
   const [generateStep, setGenerateStep] = useState<GenerateStep>("notes");
@@ -430,6 +432,14 @@ function GeneratePage() {
                 initialAge={audiences[0]?.kind === "single" && audiences[0].age <= 18 ? audiences[0].age : undefined}
                 initialCurriculum={wsCurriculumText({ curriculum, customCurriculum }) || undefined}
               />
+              <StudyNotesDialog
+                open={studyNotesOpen}
+                onOpenChange={setStudyNotesOpen}
+                sourceText={combinedNotes}
+                title={title}
+                subject={subjects.map(wsSubjectText).find(Boolean)}
+                age={audiences[0]?.kind === "single" ? audiences[0].age : undefined}
+              />
               <div>
                 <Label htmlFor="title" className="mb-2 block">
                   {t("Title")} <span className="text-muted-foreground">({t("optional")})</span>
@@ -461,9 +471,14 @@ function GeneratePage() {
                 <p className="mt-1 text-xs text-muted-foreground">{t("Your text and settings are saved automatically if you leave this page.")}</p>
               </div>
               <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
-                <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setWorksheetOpen(true)}>
+                    <FileText className="mr-2 h-4 w-4" /> {t("Create Worksheet")}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setStudyNotesOpen(true)}>
+                    <NotebookPen className="mr-2 h-4 w-4" /> {t("Study Notes")}
+                  </Button>
+                </div>
                 <Button type="button" size="sm" onClick={() => { setCustomisationVisited(true); setGenerateStep("customisation"); }} className="min-w-24">
                   {t("Next")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>

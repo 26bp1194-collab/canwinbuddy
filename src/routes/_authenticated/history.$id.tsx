@@ -7,7 +7,8 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Question } from "@/lib/ai.functions";
-import { toStrippedClipboard, downloadForPlatform } from "@/lib/export";
+import { toStrippedClipboard, downloadForPlatform, multiExcludedNotice, type Platform } from "@/lib/export";
+import { getCorrectIndexes } from "@/lib/question-utils";
 import { QuizGame } from "@/components/quiz-game";
 
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,13 @@ function HistoryDetail() {
 
   const questions = data.questions as unknown as Question[];
 
+  const exportTo = (p: Platform, msg: string) => {
+    downloadForPlatform(p, questions, data.title);
+    toast.success(msg);
+    const notice = multiExcludedNotice(p, questions);
+    if (notice) toast.warning(t(notice));
+  };
+
   const copyStripped = async () => {
     await navigator.clipboard.writeText(toStrippedClipboard(questions));
     toast.success("Copied clean questions to clipboard");
@@ -80,16 +88,16 @@ function HistoryDetail() {
               <Button variant="secondary"><Download className="mr-2 h-4 w-4" /> {t("Export")}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { downloadForPlatform("blooket", questions, data.title); toast.success("Blooket CSV downloaded"); }}>
+              <DropdownMenuItem onClick={() => exportTo("blooket", "Blooket CSV downloaded")}>
                 Blooket (.csv)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { downloadForPlatform("gimkit", questions, data.title); toast.success("Gimkit CSV downloaded"); }}>
+              <DropdownMenuItem onClick={() => exportTo("gimkit", "Gimkit CSV downloaded")}>
                 Gimkit (.csv)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { downloadForPlatform("gimkit2", questions, data.title); toast.success("Gimkit 2 CSV downloaded"); }}>
+              <DropdownMenuItem onClick={() => exportTo("gimkit2", "Gimkit 2 CSV downloaded")}>
                 Gimkit 2 (.csv)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { downloadForPlatform("kahoot", questions, data.title); toast.success("Kahoot XLSX downloaded"); }}>
+              <DropdownMenuItem onClick={() => exportTo("kahoot", "Kahoot XLSX downloaded")}>
                 Kahoot (.xlsx)
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -111,7 +119,7 @@ function HistoryDetail() {
             </p>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
               {q.choices.map((c, ci) => {
-                const correct = ci === q.correctIndex;
+                const correct = getCorrectIndexes(q).includes(ci);
                 return (
                   <li
                     key={ci}
