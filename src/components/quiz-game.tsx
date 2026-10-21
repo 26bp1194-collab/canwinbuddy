@@ -5,6 +5,7 @@ import { X, Check, XCircle, Trophy, RotateCcw, ListChecks, Loader2 } from "lucid
 import { type Question, explainWrongAnswers } from "@/lib/ai.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/lib/i18n";
+import { getCorrectIndexes, isRightPick, reorderChoices } from "@/lib/question-utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
@@ -13,6 +14,9 @@ export type ResultDetail = {
   choices: string[];
   correctIndex: number;
   chosenIndex: number;
+  /** Two-answer questions only: both correct indexes and the learner's picks */
+  correctIndexes?: number[];
+  chosenIndexes?: number[];
   correct: boolean;
   explanation?: string;
 };
@@ -26,6 +30,15 @@ interface Props {
   quizSetId?: string;
   sourceText?: string;
   onSaved?: () => void;
+}
+
+/** Correct and chosen answer texts for a result row (works for old single-answer rows). */
+export function resultTexts(r: ResultDetail) {
+  const pick = (list: number[]) => list.map((i) => r.choices?.[i]).filter((c): c is string => typeof c === "string");
+  return {
+    correct: pick(r.correctIndexes?.length ? r.correctIndexes : [r.correctIndex]),
+    chosen: pick(r.chosenIndexes?.length ? r.chosenIndexes : [r.chosenIndex]),
+  };
 }
 
 export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceText, onSaved }: Props) {
@@ -42,11 +55,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
       .map((q) => {
         /* Randomise answer positions so locations can't be memorised */
         const order = q.choices.map((_, idx) => idx).sort(() => Math.random() - 0.5);
-        return {
-          ...q,
-          choices: order.map((idx) => q.choices[idx]),
-          correctIndex: Math.max(0, order.indexOf(q.correctIndex)),
-        };
+        return reorderChoices(q, order);
       });
   }, [questions, seed, savedOrder]);
   const [i, setI] = useState(0);
@@ -57,10 +66,14 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   const [showDetails, setShowDetails] = useState(false);
   const [detailing, setDetailing] = useState(false);
   const [details, setDetails] = useState<ResultDetail[]>([]);
+  /* Picks for "Select 2" questions before Check answer */
+  const [picks, setPicks] = useState<number[]>([]);
 
   const q = shuffled[i];
+  const correctSet = q ? getCorrectIndexes(q) : [];
+  const multi = correctSet.length > 1;
   const progress = ((i + (selected !== null ? 1 : 0)) / shuffled.length) * 100;
-  const started = answers.length > 0 || selected !== null;
+  const started = answers.length > 0 || selected !== null || picks.length > 0;
 
   useEffect(() => {
     try {
@@ -68,14 +81,15 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
       if (raw) {
         const saved = JSON.parse(raw) as {
           signature: string; order: Question[]; i: number; selected: number | null;
-          score: number; answers: ResultDetail[];
+          score: number; answers: ResultDetail[]; picks?: number[];
         };
         if (saved.signature === JSON.stringify(questions) && saved.order.length === questions.length && saved.i >= 0 && saved.i < questions.length) {
           setSavedOrder(saved.order);
           setI(saved.i);
           setSelected(saved.selected);
           setScore(saved.score);
-          setAnswers(saved.answers);
+          setAnswers(Array.isArray(saved.answers) ? saved.answers : []);
+          setPicks(Array.isArray(saved.picks) ? saved.picks : []);
         } else window.localStorage.removeItem(sessionKey);
       }
     } catch { /* invalid or unavailable session storage */ }
@@ -85,14 +99,24 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
   useEffect(() => {
     if (!ready || finished || !started) return;
     try {
-      window.localStorage.setItem(sessionKey, JSON.stringify({ signature: JSON.stringify(questions), order: shuffled, i, selected, score, answers }));
+      window.localStorage.setItem(sessionKey, JSON.stringify({ signature: JSON.stringify(questions), order: shuffled, i, selected, score, answers, picks }));
     } catch { /* storage may be unavailable */ }
-  }, [ready, finished, started, sessionKey, questions, shuffled, i, selected, score, answers]);
+  }, [ready, finished, started, sessionKey, questions, shuffled, i, selected, score, answers, picks]);
 
   const pick = (idx: number) => {
     if (selected !== null) return;
+    if (multi) {
+      setPicks((p) => (p.includes(idx) ? p.filter((x) => x !== idx) : p.length >= 2 ? p : [...p, idx]));
+      return;
+    }
     setSelected(idx);
-    if (idx === q.correctIndex) setScore((s) => s + 1);
+    if (correctSet.includes(idx)) setScore((s) => s + 1);
+  };
+
+  const checkAnswer = () => {
+    if (selected !== null || picks.length !== 2) return;
+    setSelected(picks[0]);
+    if (isRightPick(q, picks)) setScore((s) => s + 1);
   };
 
   const saveSession = async (rows: ResultDetail[], correct: number) => {
@@ -127,9 +151,10 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
     const row: ResultDetail = {
       question: q.question,
       choices: q.choices,
-      correctIndex: q.correctIndex,
+      correctIndex: correctSet[0] ?? q.correctIndex,
       chosenIndex: selected,
-      correct: selected === q.correctIndex,
+      ...(multi ? { correctIndexes: correctSet, chosenIndexes: picks } : {}),
+      correct: multi ? isRightPick(q, picks) : correctSet.includes(selected),
       explanation: undefined,
     };
     const rows = [...answers, row];
@@ -141,6 +166,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
     } else {
       setI((n) => n + 1);
       setSelected(null);
+      setPicks([]);
     }
   };
 
@@ -150,6 +176,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
     setI(0);
     setScore(0);
     setSelected(null);
+    setPicks([]);
     setFinished(false);
     setAnswers([]);
     setDetails([]);
@@ -170,11 +197,10 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
       const { explanations } = await explainWrongAnswers({
         data: {
           sourceText,
-          items: wrong.map((a) => ({
-            question: a.question,
-            correct: a.choices[a.correctIndex],
-            chosen: a.choices[a.chosenIndex],
-          })),
+          items: wrong.map((a) => {
+            const tx = resultTexts(a);
+            return { question: a.question, correct: tx.correct.join(" AND "), chosen: tx.chosen.join(" AND ") };
+          }),
         },
       });
       let k = 0;
@@ -240,11 +266,11 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
                         <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
                       )}
                       <span>
-                        {t("You answered")}: <span className="text-foreground">{r.choices[r.chosenIndex]}</span>
+                        {t("You answered")}: <span className="text-foreground">{resultTexts(r).chosen.join(", ")}</span>
                         {!r.correct && (
                           <>
                             {" · "}
-                            {t("Correct")}: <span className="text-foreground">{r.choices[r.correctIndex]}</span>
+                            {t("Correct")}: <span className="text-foreground">{resultTexts(r).correct.join(", ")}</span>
                           </>
                         )}
                       </span>
@@ -279,7 +305,7 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
               </div>
             </motion.div>
           )
-        ) : (
+        ) : !q ? null : (
           <>
             <Progress value={progress} className="mb-6 h-1.5" />
             <p className="text-sm text-muted-foreground">
@@ -294,10 +320,15 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
                 transition={{ duration: 0.2 }}
               >
                 <h2 className="mt-2 text-lg font-semibold leading-tight sm:text-2xl">{q.question}</h2>
+                {multi && (
+                  <span className="mt-2 inline-block rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {t("Select 2")}
+                  </span>
+                )}
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {q.choices.map((c, idx) => {
-                    const isCorrect = idx === q.correctIndex;
-                    const isSelected = idx === selected;
+                    const isCorrect = correctSet.includes(idx);
+                    const isSelected = multi ? picks.includes(idx) : idx === selected;
                     const revealed = selected !== null;
                     const cls = revealed
                       ? isCorrect
@@ -305,7 +336,10 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
                         : isSelected
                           ? "border-destructive/60 bg-destructive/15 text-foreground"
                           : "border-border bg-secondary/40 text-muted-foreground"
-                      : "border-border bg-secondary hover:border-primary/60 hover:bg-accent";
+                      : isSelected
+                        ? "border-primary bg-primary/15 text-foreground"
+                        : "border-border bg-secondary hover:border-primary/60 hover:bg-accent";
+                    const span = q.choices.length === 3 && idx === 2 ? "sm:col-span-2" : "";
                     return (
                       <motion.button
                         key={idx}
@@ -313,7 +347,8 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
                         whileHover={selected === null ? { scale: 1.02 } : undefined}
                         whileTap={selected === null ? { scale: 0.98 } : undefined}
                         disabled={selected !== null}
-                        className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-medium transition-colors sm:p-4 ${cls}`}
+                        aria-pressed={multi && !revealed ? isSelected : undefined}
+                        className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-medium transition-colors sm:p-4 ${cls} ${span}`}
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background text-xs font-bold">
                           {String.fromCharCode(65 + idx)}
@@ -328,9 +363,15 @@ export function QuizGame({ questions, onClose, title, guest, quizSetId, sourceTe
               </motion.div>
             </AnimatePresence>
             <div className="mt-6 flex justify-end">
-              <Button onClick={next} disabled={selected === null} className="w-full sm:w-auto">
-                {i + 1 >= shuffled.length ? t("Finish") : t("Next")}
-              </Button>
+              {multi && selected === null ? (
+                <Button onClick={checkAnswer} disabled={picks.length !== 2} className="w-full sm:w-auto">
+                  {t("Check answer")}
+                </Button>
+              ) : (
+                <Button onClick={next} disabled={selected === null} className="w-full sm:w-auto">
+                  {i + 1 >= shuffled.length ? t("Finish") : t("Next")}
+                </Button>
+              )}
             </div>
           </>
         )}
