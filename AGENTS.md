@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
  
 - Keep source text and serializable verified-source attachments in the Generate page per-tab draft, and pass their complete combined text to both quiz and worksheet generation; this preserves sources across navigation without keeping raw File objects.
+- Quiz generation uses lossless chunked source analysis and evidence-targeted prompts with full-source fallback; deterministic checks precede semantic review, and only changed questions are re-reviewed while retaining a whole-set overview to preserve quality without repeated token spend.
