@@ -319,6 +319,17 @@ Mix rules:
 - Do not start more than two consecutive questions with the same opening words.
 - Wrong options must be plausible and similar in length to the correct option. Never make the correct option the longest one every time.`;
 
+const MATHS_MIX = `MATHS AND EQUATION QUESTIONS: apply this block ONLY when the subject is mathematics-related (Mathematics, Additional Mathematics, Physics, Chemistry, Accounting, Economics or similar) or the notes contain numbers, formulas or worked examples. Otherwise ignore it.
+Extra styles to add to the mix: direct calculation ("What is 7 + 8?", "12 × 6 = ?"); solve for the unknown ("If 3x + 5 = 20, what is x?"); fractions, decimals, percentages and ratios; order of operations, indices, roots and simplifying; geometry and measurement with formulas (area, perimeter, volume, angles); unit conversion; number patterns and sequences; short real-life word problems; formula application in science (formulas from the source or standard formulas for that curriculum).
+Rules:
+- Match the level to age, difficulty and curriculum. Ages 6 to 8: simple counting and basic arithmetic. Primary: the four operations, fractions, simple geometry. SPM, IGCSE, A-Levels, AP, SAT, CBSE, ICSE, Gaokao: real exam-style topics and wording for that curriculum.
+- For maths subjects the source-only rule is relaxed: when the notes only give a topic or method, you may write original practice problems using that topic and method (sourceQuote then quotes the topic/method text). Do not use facts outside the topic.
+- ACCURACY IS CRITICAL. Work out each answer step by step before writing the options. Exactly one option must equal the correct value.
+- Wrong options come from common mistakes (wrong sign, wrong operation, forgetting to carry, wrong formula, unit slip), never random numbers.
+- No two options may be equal in value even if written differently (0.5 and 1/2). Keep format, units and rounding consistent across all 4 options. State required rounding or units in the question when they matter.
+- Write all maths in plain text with Unicode symbols only: + − × ÷ = ≠ ≤ ≥ ² ³ √ π, fractions as 3/4. NEVER use LaTeX, dollar signs, backslashes or markdown.
+- Keep any Short Q&A / Kahoot length limits (questions ≤120 characters, options ≤75).`;
+
 function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
   const list = (title: string, items?: string[]) => (items?.length ? `\n\n${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : "");
 
@@ -345,6 +356,8 @@ STEMS:
 - Use the assigned correct-answer position (correctIndex) exactly.
 
 ${STYLE_MIX}
+
+${MATHS_MIX}
 
  ${SELF_CONTAINED}
  ${TERM_CONSISTENCY}
@@ -542,7 +555,9 @@ Check each question, in this order:
 6. SET-LEVEL (compare the whole set): fail the later question when two test the same concept/fact (even reworded); fail questions whose stem opening (first 2-3 words) is used by more than 3 questions in the set${analysis?.objectives?.length ? "; when objectives or key terms below are not covered by any question while another concept is tested twice, fail one of the repeats and say which objective to test instead" : ""}.
 7. TERM CONSISTENCY: fail any question or option that pluralizes, abbreviates or respells a source-defined term; include the exact source term in the issue.
 8. STYLE VARIETY (compare the whole set): if one question style dominates (more than about 40% of a set of 8+, or fewer than 2-3 styles in a smaller set) or several stems repeat the same opening, fail the weakest of those questions and say which other style to rewrite it into, using the same facts and keeping the correct-answer position balance.
+9. MATHS CHECK: for every calculation question, independently recompute the answer from scratch. Fail it if the result does not match the marked correct option, if two options have the same value (e.g. 0.5 and 1/2), or if it contains LaTeX, dollar signs or backslashes; give the correct value and which option/correctIndex should hold it, keeping the correct-answer position balance.
 Each issue is one short, actionable sentence. ${STYLE_MIX}
+${MATHS_MIX}
 ${TERM_CONSISTENCY}${analysis?.namedTerms?.length ? `\nEXACT FIRST-OCCURRENCE SOURCE TERMS:\n${analysis.namedTerms.join("\n")}` : ""}${mustCoverList(analysis) ? `\nMUST-COVER OBJECTIVES / KEY TERMS:\n${mustCoverList(analysis).map((m) => `- ${m}`).join("\n")}` : ""}${guidanceBlock(guidance)}`;
 
 function mustCoverList(analysis?: Analysis | null): string[] {

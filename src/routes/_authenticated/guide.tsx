@@ -78,6 +78,7 @@ const SECTIONS: GuideSection[] = [
       "Simple mode has one switch for short questions and answers.",
       "Advanced mode has sliders for question length, answer length, complexity and obscurity (from explicit to implicit).",
       "Questions come in a mix of styles, such as true-or-false statements, fill in the blank, scenarios, odd one out and calculations, so quizzes feel less repetitive.",
+      "For maths and science, quizzes can include calculations, equations and word problems at the right level for your age and curriculum.",
       "If your notes cannot support that many questions, the app tells you. You can add more sources or continue with fewer questions.",
       "Press Generate. The AI studies your notes, writes the questions, then checks them against your source before saving.",
     ],
@@ -103,6 +104,7 @@ const SECTIONS: GuideSection[] = [
       "Tick questions and press Edit selected (or Edit all), then tell the AI what to change.",
       "In the More menu, Follow-up quiz makes a fresh quiz from the same notes. Choose easier, harder or the same level.",
       "Sources shows the notes and settings the quiz was made from.",
+      "Press Flashcards on a quiz to flip through the questions and answers, then mark each card Know it or Still learning.",
     ],
   },
   {
