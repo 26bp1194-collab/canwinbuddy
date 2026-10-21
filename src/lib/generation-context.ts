@@ -29,7 +29,7 @@ function joinEvidence(sections: SourceSection[]): string {
   let joined = "";
   for (const section of sections) {
     const contiguous = previousEnd !== undefined && section.start !== undefined && section.start <= previousEnd;
-    const overlap = contiguous ? Math.max(0, previousEnd - (section.start ?? 0)) : 0;
+    const overlap = contiguous && previousEnd !== undefined && section.start !== undefined ? Math.max(0, previousEnd - section.start) : 0;
     joined += (joined && !contiguous ? "\n\n" : "") + section.text.slice(overlap);
     previousEnd = section.end;
   }
