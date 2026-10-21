@@ -89,23 +89,52 @@ const MATH_RULES = `Mathematical notation: write math using Unicode so it render
 - Symbols: √, ∛, π, θ, ×, ÷, ±, ≈, ≠, ≤, ≥, ∞, ∑, ∏, ∫, ∂, Δ, ∈, ∪, ∩, →, ∠, °
 - Never use LaTeX, \\frac, $...$, or markdown math delimiters.`;
 
-async function callAI(messages: Array<{ role: string; content: string }>, json = true) {
+/* Each AI call is capped (no endless hang) and retried once on timeouts / server errors. */
+const AI_TIMEOUT_MS = 75_000;
+async function callAI(messages: Array<{ role: string; content: string }>, json = true, attempt = 0): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const res = await fetch(GATEWAY, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(GATEWAY, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    if (attempt < 1) return callAI(messages, json, attempt + 1);
+    throw new Error(ctrl.signal.aborted ? "The AI took too long to respond. Please try again." : e instanceof Error ? e.message : "AI request failed");
+  }
+  clearTimeout(timer);
   if (res.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
   if (res.status === 402) throw new Error("AI credits exhausted. Please add credits to your workspace.");
+  if (res.status >= 500 && attempt < 1) return callAI(messages, json, attempt + 1);
   if (!res.ok) throw new Error(`AI request failed (${res.status}): ${await res.text()}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content as string;
+  return (data.choices?.[0]?.message?.content as string) ?? "";
+}
+
+/** Runs async jobs with at most `limit` in flight (server allows ~6 outbound calls). */
+async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
 }
 
 function normalize(s: string) {
@@ -158,14 +187,16 @@ export function tooSimilar(a: Question, b: Question) {
   return sim >= 0.6;
 }
 
-/* Batch size scales with the requested amount:
-   1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
+/* Questions per AI call. Several batches run in parallel each round, and every
+   new question is still checked against all accepted ones for duplicates. */
 function batchSize(count: number) {
-  if (count <= 25) return 1;
-  if (count <= 50) return 2;
-  if (count <= 75) return 3;
-  return 4;
+  if (count <= 5) return count;
+  if (count <= 20) return 5;
+  return 8;
 }
+const PARALLEL_BATCHES = 4;
+/** Generation/review stop starting new AI work after this, so requests always return. */
+const STEP_DEADLINE_MS = 150_000;
 
 /* ---------------- Level / curriculum settings (sent first, every call) ---------------- */
 
@@ -500,15 +531,13 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxAttempts = Math.ceil(count / batch) * 2 + 8;
-    let attempts = 0;
+    const maxRounds = Math.ceil(count / (batch * PARALLEL_BATCHES)) * 2 + 4;
+    const deadline = Date.now() + STEP_DEADLINE_MS;
+    let rounds = 0;
     let emptyStreak = 0;
+    let lastError: unknown = null;
 
-    while (validated.length < count && attempts < maxAttempts && pending.length) {
-      attempts++;
-      const slots = pending.slice(0, Math.min(count - validated.length, batch));
-      const need = slots.length;
-
+    const askBatch = async (slots: Slot[]) => {
       const avoid = validated.map((q) => q.question);
       const plan = slots
         .map(
@@ -516,58 +545,66 @@ export const generateQuestions = createServerFn({ method: "POST" })
             `Question ${i + 1}: concept = "${s.concept}"; type = ${s.type}${s.type === "calculation" ? " (must require calculating/applying the formula or data)" : ""}; start the stem with "${s.opener}" (adapt grammar if needed); correctIndex = ${s.answer}.`,
         )
         .join("\n");
-      const userPrompt = `Generate exactly ${need} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
+      const userPrompt = `Generate exactly ${slots.length} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
         avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
-      let raw: string;
       try {
-        raw = await callAI([
+        const raw = await callAI([
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ]);
+        const parsed = JSON.parse(raw) as { questions?: unknown[] };
+        return { slots, items: Array.isArray(parsed.questions) ? parsed.questions : [] };
       } catch (e) {
-        if (validated.length === 0) throw e;
-        emptyStreak++;
-        if (emptyStreak >= 5) break;
-        continue;
+        lastError = e;
+        return { slots, items: [] as unknown[] };
       }
-      let parsed: { questions: unknown[] };
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        emptyStreak++;
-        if (emptyStreak >= 5) break;
-        continue;
-      }
+    };
+
+    while (validated.length < count && rounds < maxRounds && pending.length && Date.now() < deadline) {
+      rounds++;
+      /* Split the open slots into parallel batches for this round */
+      const open = pending.slice(0, count - validated.length);
+      const groups: Slot[][] = [];
+      for (let k = 0; k < open.length && groups.length < PARALLEL_BATCHES; k += batch) groups.push(open.slice(k, k + batch));
+      const results = await pool(groups, PARALLEL_BATCHES, askBatch);
+
       let addedThisRound = 0;
-      const items = parsed.questions ?? [];
-      for (let k = 0; k < items.length && k < slots.length; k++) {
-        const p = QuestionSchema.safeParse(items[k]);
-        if (!p.success) continue;
-        const q = placeCorrect(p.data, slots[k].answer);
-        if (!validStructure(q, count >= 8)) continue;
-        const isMulti = getCorrectIndexes(q).length > 1;
-        if (isMulti && validated.filter((a) => getCorrectIndexes(a).length > 1).length >= Math.ceil(count * 0.15)) continue;
-        if (q.choices.length < 4 && validated.filter((a) => a.choices.length < 4).length >= (count < 8 ? 1 : Math.ceil(count * 0.25))) continue;
-        const dedupKey = q.question.toLowerCase().trim();
-        if (seen.has(dedupKey)) continue;
-        if (REFERS_TO_SOURCE.test(q.question)) continue;
-        if (!validateQuestion(q, sourceNorm)) continue;
-        if (validated.some((a) => tooSimilar(a, q))) continue;
-        seen.add(dedupKey);
-        validated.push(q);
-        pending.splice(pending.indexOf(slots[k]), 1);
-        addedThisRound++;
-        if (validated.length >= count) break;
+      for (const { slots, items } of results) {
+        for (let k = 0; k < items.length && k < slots.length; k++) {
+          if (validated.length >= count) break;
+          const p = QuestionSchema.safeParse(items[k]);
+          if (!p.success) continue;
+          const q = placeCorrect(p.data, slots[k].answer);
+          if (!validStructure(q, count >= 8)) continue;
+          const isMulti = getCorrectIndexes(q).length > 1;
+          if (isMulti && validated.filter((a) => getCorrectIndexes(a).length > 1).length >= Math.ceil(count * 0.15)) continue;
+          if (q.choices.length < 4 && validated.filter((a) => a.choices.length < 4).length >= (count < 8 ? 1 : Math.ceil(count * 0.25))) continue;
+          const dedupKey = q.question.toLowerCase().trim();
+          if (seen.has(dedupKey)) continue;
+          if (REFERS_TO_SOURCE.test(q.question)) continue;
+          if (!validateQuestion(q, sourceNorm)) continue;
+          if (validated.some((a) => tooSimilar(a, q))) continue;
+          seen.add(dedupKey);
+          validated.push(q);
+          const at = pending.indexOf(slots[k]);
+          if (at >= 0) pending.splice(at, 1);
+          addedThisRound++;
+        }
       }
-      // A slot that failed twice gets a fresh concept so the run doesn't stall on it
-      if (addedThisRound === 0 && pending.length) {
-        const s = pending.shift()!;
-        const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
-        pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+      /* Slots that failed get a fresh concept so the run doesn't stall on them */
+      for (const g of groups) {
+        for (const s of g) {
+          const at = pending.indexOf(s);
+          if (at < 0) continue;
+          pending.splice(at, 1);
+          const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
+          pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+        }
       }
+      if (validated.length === 0 && lastError && addedThisRound === 0 && rounds >= 2) throw lastError;
       emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
-      if (emptyStreak >= 5) break;
+      if (emptyStreak >= 3) break;
     }
 
     if (validated.length === 0) {
@@ -709,8 +746,9 @@ const ReviewInput = z.object({
   spec: StyleSpecSchema.partial().optional(),
 });
 
-const MAX_REVIEW_ROUNDS = 5;
+const MAX_REVIEW_ROUNDS = 3;
 const GLOBAL_REGEN_CAP = 150;
+const REPAIR_PARALLEL = 5;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -719,18 +757,24 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     const { sourceText, questions, difficulty, requested, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
+    const deadline = Date.now() + STEP_DEADLINE_MS;
 
-    /* Questions are never deleted — failing ones are regenerated in place and
-       re-verified, for up to 5 rounds. After that the current version is kept. */
+    /* Questions are never deleted — failing ones are regenerated in place (in parallel)
+       and re-verified, for a few rounds. After that the current version is kept. */
     const current: Question[] = [...questions];
     let regenerated = 0;
     let budget = GLOBAL_REGEN_CAP;
     let rounds = 0;
     let stillFailing = 0;
 
-    for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
+    for (let round = 0; round < MAX_REVIEW_ROUNDS && Date.now() < deadline; round++) {
       rounds = round + 1;
-      const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
+      let reviews: Array<{ index: number; pass: boolean; issues: string[] }>;
+      try {
+        reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
+      } catch {
+        break; // reviewer unavailable — keep the questions we have
+      }
       const verdict = new Map(reviews.map((r) => [r.index, r]));
       const local = localIssues(current);
 
@@ -742,27 +786,37 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       });
 
       stillFailing = failing.length;
-      if (failing.length === 0) break;
+      if (failing.length === 0 || Date.now() >= deadline) break;
+
+      const todo = failing.slice(0, Math.max(0, budget));
+      budget -= todo.length;
+      const snapshot = [...current];
+      const replacements = await pool(todo, REPAIR_PARALLEL, async (f) => {
+        try {
+          const others = snapshot.filter((_, i) => i !== f.index);
+          return await regenerateOne(sourceText, difficulty, analysis, snapshot[f.index], f.issues, others, spec, guidance, curriculum);
+        } catch {
+          return null;
+        }
+      });
 
       let changed = false;
-      for (const f of failing) {
-        if (budget <= 0) break;
-        budget--;
+      todo.forEach((f, k) => {
+        const replacement = replacements[k];
+        if (!replacement) return;
         const others = current.filter((_, i) => i !== f.index);
-        const replacement = await regenerateOne(sourceText, difficulty, analysis, current[f.index], f.issues, others, spec, guidance, curriculum);
-        if (!replacement) continue;
         const dupe = others.some(
           (a) =>
             a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim() ||
             tooSimilar(a, replacement),
         );
-        if (dupe || REFERS_TO_SOURCE.test(replacement.question) || !validateQuestion(replacement, sourceNorm)) continue;
+        if (dupe || REFERS_TO_SOURCE.test(replacement.question) || !validateQuestion(replacement, sourceNorm)) return;
         /* Keep the planned answer position so the A-D balance is preserved */
         current[f.index] = placeCorrect(replacement, current[f.index].correctIndex);
         regenerated++;
         changed = true;
-      }
-      if (!changed) break;
+      });
+      if (!changed || budget <= 0) break;
     }
 
     return {
