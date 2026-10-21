@@ -269,9 +269,14 @@ function GeneratePage() {
 
       setStage("reviewing");
       const t2 = performance.now();
-      const { questions } = await reviewAndRepair({
-        data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance, curriculum: curriculumName },
-      });
+      let questions = generated.questions;
+      try {
+        ({ questions } = await reviewAndRepair({
+          data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance, curriculum: curriculumName },
+        }));
+      } catch {
+        /* Review is a quality pass — if it fails, keep the generated questions */
+      }
       mark("Reviewing quiz", t2);
 
       setStage("saving");
