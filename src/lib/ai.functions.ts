@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
+import { generateChatCompletion, GatewayError } from "@lovable.dev/ai-gateway";
+import { splitSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, completeReviewIndexes } from "./generation-context";
 
 const QuestionSchema = z
   .object({
@@ -79,8 +81,7 @@ const InputSchema = z.object({
 });
 
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = "google/gemini-3.8-flash";
 
 const MATH_RULES = `Mathematical notation: write math using Unicode so it renders as plain text everywhere.
 - Powers/superscripts: x², x³, 10⁻⁴ (use superscript characters; fall back to x^n only if no character exists)
@@ -89,37 +90,27 @@ const MATH_RULES = `Mathematical notation: write math using Unicode so it render
 - Symbols: √, ∛, π, θ, ×, ÷, ±, ≈, ≠, ≤, ≥, ∞, ∑, ∏, ∫, ∂, Δ, ∈, ∪, ∩, →, ∠, °
 - Never use LaTeX, \\frac, $...$, or markdown math delimiters.`;
 
-/* Each AI call is capped (no endless hang) and retried once on timeouts / server errors. */
+/* Bound the complete response, with SDK-safe retries only; never replay an unknown outcome. */
 const AI_TIMEOUT_MS = 75_000;
-async function callAI(messages: Array<{ role: string; content: string }>, json = true, attempt = 0): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
-  let res: Response;
+async function callAI(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, json = true): Promise<string> {
   try {
-    res = await fetch(GATEWAY, {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        ...(json ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
-  } catch (e) {
-    clearTimeout(timer);
-    if (attempt < 1) return callAI(messages, json, attempt + 1);
-    throw new Error(ctrl.signal.aborted ? "The AI took too long to respond. Please try again." : e instanceof Error ? e.message : "AI request failed");
+    const result = await generateChatCompletion({
+      model: MODEL,
+      messages,
+      ...(json ? { response_format: { type: "json_object" as const } } : {}),
+    }, { signal: AbortSignal.timeout(AI_TIMEOUT_MS) });
+    const content = result.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) throw new Error("The AI returned no content. Please try again.");
+    return content;
+  } catch (error) {
+    if (error instanceof GatewayError) {
+      console.error("Quiz AI request failed", { code: error.code, ids: error.ids, outcome: error.outcome });
+      if (error.code === "payment_required") throw new Error("AI credits exhausted. Please add credits to your workspace.");
+      if (error.code === "rate_limited") throw new Error("Rate limited. Please wait a moment and try again.");
+      throw new Error("The AI request could not finish. Your notes are preserved; please try again.");
+    }
+    throw error;
   }
-  clearTimeout(timer);
-  if (res.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
-  if (res.status === 402) throw new Error("AI credits exhausted. Please add credits to your workspace.");
-  if (res.status >= 500 && attempt < 1) return callAI(messages, json, attempt + 1);
-  if (!res.ok) throw new Error(`AI request failed (${res.status}): ${await res.text()}`);
-  const data = await res.json();
-  return (data.choices?.[0]?.message?.content as string) ?? "";
 }
 
 /** Runs async jobs with at most `limit` in flight (server allows ~6 outbound calls). */
@@ -189,11 +180,6 @@ export function tooSimilar(a: Question, b: Question) {
 
 /* Questions per AI call. Several batches run in parallel each round, and every
    new question is still checked against all accepted ones for duplicates. */
-function batchSize(count: number) {
-  if (count <= 5) return count;
-  if (count <= 20) return 5;
-  return 8;
-}
 const PARALLEL_BATCHES = 4;
 /** Generation/review stop starting new AI work after this, so requests always return. */
 const STEP_DEADLINE_MS = 150_000;
@@ -345,32 +331,30 @@ export const analyzeSource = createServerFn({ method: "POST" })
 - "maxQuestions": equal to the number of items in "concepts".
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
-    const user = `Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${sourceText.slice(0, 30000)}"""`;
+    const chunks = splitSource(sourceText);
+    const results = await pool(chunks, 3, async (chunk) => {
+    const user = `Source section ${chunk.id + 1}/${chunks.length}. Analyse only this section. Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${chunk.text}"""`;
     const raw = await callAI([
       { role: "system", content: system },
       { role: "user", content: user },
     ]);
     try {
-      const parsed = AnalysisSchema.parse(JSON.parse(raw));
-      const concepts = (parsed.concepts ?? []).slice(0, 100);
-      return {
-        topics: parsed.topics.slice(0, 12),
-        keyFacts: parsed.keyFacts.slice(0, 60),
-        summaries: (parsed.summaries ?? []).slice(0, 12),
-        namedTerms: (parsed.namedTerms ?? []).slice(0, 30),
-        coverageNotes: parsed.coverageNotes,
-        concepts,
-        objectives: (parsed.objectives ?? []).slice(0, 30),
-        keyTerms: (parsed.keyTerms ?? []).slice(0, 40),
-        calculations: (parsed.calculations ?? []).slice(0, 30),
-        sourceQuestions: (parsed.sourceQuestions ?? []).slice(0, 10),
-        // Capacity = distinct testable concepts (same number the warning uses)
-        maxQuestions: concepts.length || parsed.maxQuestions || 0,
-      } satisfies Analysis;
+      return AnalysisSchema.parse(JSON.parse(raw));
     } catch {
-      return { topics: [], keyFacts: [], summaries: [], namedTerms: [], coverageNotes: "", maxQuestions: 0, concepts: [], objectives: [], keyTerms: [], calculations: [], sourceQuestions: [] } as Analysis;
+      throw new Error("The source analysis was incomplete. Your notes are preserved; please try again.");
     }
+    });
+    const merge = (key: "topics" | "keyFacts" | "summaries" | "namedTerms" | "concepts" | "objectives" | "keyTerms" | "calculations" | "sourceQuestions", limit: number) => uniqueText(results.flatMap((r) => r[key]), limit);
+    const concepts = merge("concepts", 300);
+    return {
+      topics: merge("topics", 36), keyFacts: merge("keyFacts", 100), summaries: merge("summaries", 36),
+      namedTerms: merge("namedTerms", 100), concepts, objectives: merge("objectives", 100), keyTerms: merge("keyTerms", 100),
+      calculations: merge("calculations", 100), sourceQuestions: merge("sourceQuestions", 30),
+      coverageNotes: results.map((r) => r.coverageNotes).join(" "),
+      maxQuestions: concepts.length || Math.min(300, results.reduce((n, r) => n + r.maxQuestions, 0)),
+    } satisfies Analysis;
   });
+
 
 
 /* ---------------- 2. Generate ---------------- */
@@ -404,7 +388,7 @@ Rules:
 - Write all maths in plain text with Unicode symbols only: + − × ÷ = ≠ ≤ ≥ ² ³ √ π, fractions as 3/4. NEVER use LaTeX, dollar signs, backslashes or markdown.
 - Keep any Short Q&A / Kahoot length limits (questions ≤95 characters, options ≤60).`;
 
-function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
+function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, math = true) {
   const list = (title: string, items?: string[]) => (items?.length ? `\n\n${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : "");
 
   return `You generate multiple-choice quiz questions from provided source material.
@@ -431,11 +415,11 @@ STEMS:
 
 ${STYLE_MIX}
 
-${MATHS_MIX}
+${math ? MATHS_MIX : ""}
 
  ${SELF_CONTAINED}
  ${TERM_CONSISTENCY}
- ${MATH_RULES}${guidanceBlock(guidance)}${list("ANALYSED TOPICS", analysis?.topics)}${list("KEY FACTS FROM THE NOTES", analysis?.keyFacts)}${list("FORMULAS / WORKED EXAMPLES / DATA IN THE NOTES", analysis?.calculations)}${list("THE SOURCE'S OWN PRACTICE QUESTIONS (use as a guide for style and difficulty)", analysis?.sourceQuestions)}${list("EXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms)", analysis?.namedTerms)}`;
+ ${MATH_RULES}${guidanceBlock(guidance)}${list("EXACT SOURCE-DEFINED TERMS (use only these spellings and singular forms)", analysis?.namedTerms)}`;
 }
 
 /* ---------------- Blueprint: plan the whole set before writing ---------------- */
@@ -475,7 +459,7 @@ function buildBlueprint(count: number, difficulty: string, analysis: Analysis | 
   const types: QType[] = [];
   while (types.length < count) {
     let added = false;
-    for (const p of pools) if (p.length) { types.push(p.shift()!); added = true; }
+    for (const p of pools) { const next = p.shift(); if (next) { types.push(next); added = true; } }
     if (!added) types.push("recall");
   }
 
@@ -525,20 +509,22 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const { sourceText, count, difficulty, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
-    const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance, curriculum);
+    const evidenceSections = splitSource(sourceText, 2400, 300);
+    const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance, curriculum, hasMathContext(sourceText, guidance, analysis?.calculations));
 
     const pending: Slot[] = buildBlueprint(count, difficulty, analysis, spec);
-    const batch = batchSize(count);
+    let batch = generationBatchSize(count, spec?.mode === "advanced", spec?.mode === "advanced" && ((spec.questionLength ?? 3) >= 4 || (spec.answerLength ?? 3) >= 4), sourceText.length);
     const validated: Question[] = [];
     const seen = new Set<string>();
     const maxRounds = Math.ceil(count / (batch * PARALLEL_BATCHES)) * 2 + 4;
     const deadline = Date.now() + STEP_DEADLINE_MS;
     let rounds = 0;
     let emptyStreak = 0;
-    let lastError: unknown = null;
+
 
     const askBatch = async (slots: Slot[]) => {
-      const avoid = validated.map((q) => q.question);
+      const avoid = uniqueText(validated.map((q) => q.sourceQuote), 100);
+      const evidence = selectEvidence(evidenceSections, slots.map((slot) => slot.concept));
       const plan = slots
         .map(
           (s, i) =>
@@ -546,8 +532,8 @@ export const generateQuestions = createServerFn({ method: "POST" })
         )
         .join("\n");
       const userPrompt = `Generate exactly ${slots.length} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
-        avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
-      }\n\nSOURCE:\n"""${sourceText}"""`;
+        avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used evidence (avoid testing the same fact):\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
+      }\n\nSOURCE EXCERPTS (verbatim, in source order):\n"""${evidence}"""`;
       try {
         const raw = await callAI([
           { role: "system", content: systemPrompt },
@@ -556,8 +542,9 @@ export const generateQuestions = createServerFn({ method: "POST" })
         const parsed = JSON.parse(raw) as { questions?: unknown[] };
         return { slots, items: Array.isArray(parsed.questions) ? parsed.questions : [] };
       } catch (e) {
-        lastError = e;
-        return { slots, items: [] as unknown[] };
+        // Malformed completed output can be repaired; transport failures must not be replayed.
+        if (e instanceof SyntaxError) return { slots, items: [] as unknown[] };
+        throw e;
       }
     };
 
@@ -598,11 +585,11 @@ export const generateQuestions = createServerFn({ method: "POST" })
           const at = pending.indexOf(s);
           if (at < 0) continue;
           pending.splice(at, 1);
-          const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
-          pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+          // Keep the original concept and its coverage assignment on retries.
+          pending.push(s);
         }
       }
-      if (validated.length === 0 && lastError && addedThisRound === 0 && rounds >= 2) throw lastError;
+      if (addedThisRound < open.slice(0, batch * PARALLEL_BATCHES).length / 2) batch = Math.max(3, Math.floor(batch / 2));
       emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
       if (emptyStreak >= 3) break;
     }
@@ -626,9 +613,9 @@ const ReviewSchema = z.object({
   ),
 });
 
-const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) => `You are a strict quiz quality reviewer.
+const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, math = true) => `You are a strict quiz quality reviewer.
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
-- Review EVERY question given, using its index from the input. "issues" is empty when pass is true.
+- Review EVERY question in QUESTIONS TO REVIEW, using its original index. Use SET OVERVIEW only for whole-set comparisons; do not return reviews for overview-only items. "issues" is empty when pass is true.
 ${levelBlock(difficulty, spec, curriculum)}
 Check each question, in this order:
 1. GROUNDING (check first): is the marked correct answer TRUE according to the notes? Accept answers stated in the notes AND answers DERIVED correctly from a formula, worked example, data table or rule in the notes (e.g. notes give speed = distance / time; a question asking the speed for 150 m in 10 s with answer 15 m/s is VALID). For derived answers, redo the working yourself and fail only if the working or result is wrong — never fail because the final answer text does not appear in the notes. Fail if it contradicts the notes or relies on outside facts.
@@ -636,13 +623,13 @@ Check each question, in this order:
 3. DISTRACTORS: wrong options must be plausible misconceptions on the same topic (for calculations: common mistakes such as a forgotten step, wrong unit conversion, not multiplying by 100). Fail for options from an unrelated part of the notes, silly options, options contradicting the stem, two wrong options meaning the same thing, or more than one defensible answer (ambiguous / double-correct).
 4. FORMATTING: all options must share capitalisation, style and similar length; the correct option must not stand out. Ordinary terms (mass, weight) must not be capitalised mid-sentence.
 5. CONTEXT: fail if a learner without the notes could not answer from the stem and options alone, or if it says "according to the text/source/notes/passage/definition", or uses vague references ("it", "this process", "the above").
-6. SET-LEVEL (compare the whole set): fail the later question when two test the same concept/fact (even reworded); fail questions whose stem opening (first 2-3 words) is used by more than 3 questions in the set${analysis?.objectives?.length ? "; when objectives or key terms below are not covered by any question while another concept is tested twice, fail one of the repeats and say which objective to test instead" : ""}.
+6. SET-LEVEL (compare the whole set): fail the later question when two test the same concept/fact (even reworded); fail questions whose stem opening (first 2-3 words) is used by more than ${stemCap(100)} questions in a 100-question set (for smaller sets use max(3, ceil(set size / 25)))${analysis?.objectives?.length ? "; when objectives or key terms below are not covered by any question while another concept is tested twice, fail one of the repeats and say which objective to test instead" : ""}.
 7. TERM CONSISTENCY: fail any question or option that pluralizes, abbreviates or respells a source-defined term; include the exact source term in the issue.
 8. STYLE VARIETY (compare the whole set): if one question style dominates (more than about 40% of a set of 8+, or fewer than 2-3 styles in a smaller set) or several stems repeat the same opening, fail the weakest of those questions and say which other style to rewrite it into, using the same facts and keeping the correct-answer position balance.
 10. STRUCTURE: fail it if the number of correct options does not match the stem (a "Select TWO answers." stem needs exactly two correct options in "correctIndexes" out of 4; any other stem needs exactly one), if it has fewer than 2 or more than 4 options, if a 2-option question is not a natural true-or-false, if two options have the same value or meaning, or if any option is "all/none of the above".
-9. MATHS CHECK: for every calculation question, independently recompute the answer from scratch. Fail it if the result does not match the marked correct option, if two options have the same value (e.g. 0.5 and 1/2), or if it contains LaTeX, dollar signs or backslashes; give the correct value and which option/correctIndex should hold it, keeping the correct-answer position balance.
-Each issue is one short, actionable sentence. ${STYLE_MIX}
-${MATHS_MIX}
+${math ? `9. MATHS CHECK: for every calculation question, independently recompute the answer from scratch. Fail it if the result does not match the marked correct option, if two options have the same value (e.g. 0.5 and 1/2), or if it contains LaTeX, dollar signs or backslashes; give the correct value and which option/correctIndex should hold it, keeping the correct-answer position balance.` : ""}
+Each issue is one short, actionable sentence.
+${math ? MATHS_MIX : ""}
 ${TERM_CONSISTENCY}${analysis?.namedTerms?.length ? `\nEXACT FIRST-OCCURRENCE SOURCE TERMS:\n${analysis.namedTerms.join("\n")}` : ""}${mustCoverList(analysis) ? `\nMUST-COVER OBJECTIVES / KEY TERMS:\n${mustCoverList(analysis).map((m) => `- ${m}`).join("\n")}` : ""}${guidanceBlock(guidance)}`;
 
 function mustCoverList(analysis?: Analysis | null): string[] {
@@ -650,21 +637,23 @@ function mustCoverList(analysis?: Analysis | null): string[] {
   return [...(analysis.objectives ?? []), ...(analysis.keyTerms ?? [])];
 }
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
-  const user = `NOTES:\n"""${sourceText.slice(0, 20000)}"""\n\nQUESTIONS (correct answer marked by correctIndex; "Select TWO" questions list both in correctIndexes):\n${JSON.stringify(
-    questions.map((q, index) => ({ index, ...q })),
-  )}`;
-  const raw = await callAI([
-    { role: "system", content: REVIEW_SYSTEM(difficulty, analysis, spec, guidance, curriculum) },
-    { role: "user", content: user },
-  ]);
-  try {
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, indexes = questions.map((_, i) => i)) {
+  const sections = splitSource(sourceText, 2400, 300);
+  const groups: number[][] = [];
+  for (let i = 0; i < indexes.length; i += 15) groups.push(indexes.slice(i, i + 15));
+  const overview = questions.map((q, index) => ({ index, question: q.question, answers: getCorrectIndexes(q).map((i) => q.choices[i]) }));
+  const results = await pool(groups, 3, async (group) => {
+    const evidence = selectEvidence(sections, group.map((i) => questions[i].sourceQuote));
+    const user = `SOURCE EXCERPTS (verbatim):\n"""${evidence}"""\n\nSET OVERVIEW:\n${JSON.stringify(overview)}\n\nQUESTIONS TO REVIEW:\n${JSON.stringify(group.map((index) => ({ index, ...questions[index] })))}`;
+    const raw = await callAI([
+      { role: "system", content: REVIEW_SYSTEM(difficulty, analysis, spec, guidance, curriculum, hasMathContext(evidence, guidance, analysis?.calculations)) },
+      { role: "user", content: user },
+    ]);
     const parsed = ReviewSchema.parse(JSON.parse(raw));
+    if (!completeReviewIndexes(parsed.reviews.map((r) => r.index), group)) throw new Error("The AI review was incomplete.");
     return parsed.reviews;
-  } catch {
-    // Reviewer failed — do not throw away valid work.
-    return questions.map((_, index) => ({ index, pass: true, issues: [] as string[] }));
-  }
+  });
+  return results.flat();
 }
 
 /** Deterministic set-level checks the reviewer may miss. */
@@ -674,6 +663,8 @@ function localIssues(current: Question[]): Map<number, string[]> {
   const cap = stemCap(current.length);
   const openerCount = new Map<string, number>();
   current.forEach((q, i) => {
+    if (!validStructure(q, current.length >= 8)) add(i, "Fix option counts, duplicate choices, and single/two-answer structure.");
+    if (/\$|\\(?:frac|sqrt|begin|text)/.test(q.question + q.choices.join(" "))) add(i, "Replace LaTeX or dollar signs with plain Unicode maths.");
     if (REFERS_TO_SOURCE.test(q.question)) add(i, "Remove wording that refers to the text/source/notes; make the question standalone.");
     const o = openerOf(q.question);
     const n = (openerCount.get(o) ?? 0) + 1;
@@ -701,6 +692,8 @@ async function regenerateOne(
   curriculum?: string | null,
 ): Promise<Question | null> {
   const used = new Set(accepted.map((q) => openerOf(q.question)));
+  const duplicate = issues.some((issue) => /duplicat|same concept|different concept|objective/i.test(issue));
+  const evidence = duplicate ? sourceText : selectEvidence(splitSource(sourceText, 2400, 300), [failed.sourceQuote]);
   const user = `Write ONE replacement quiz question.
 
 The following question FAILED review:
@@ -715,15 +708,15 @@ Fix these issues. Keep the same concept unless the issues say it duplicates anot
 Avoid these overused stem openings: ${[...used].slice(0, 40).join(", ") || "(none)"}
 
 Do NOT duplicate any of these already-accepted questions:
-${accepted.map((q) => `- ${q.question}`).join("\n") || "(none)"}
+${uniqueText(accepted.map((q) => q.sourceQuote), 100).join("\n") || "(none)"}
 
 Keep the same number of options and the same single- or two-answer structure as the failed question, unless the issues say that structure is wrong.
 Return JSON with exactly one item: {"questions":[{...}]}
 
 SOURCE:
-"""${sourceText}"""`;
+"""${evidence}"""`;
   const raw = await callAI([
-    { role: "system", content: genSystemPrompt(difficulty, analysis, spec, guidance, curriculum) },
+    { role: "system", content: genSystemPrompt(difficulty, analysis, spec, guidance, curriculum, hasMathContext(evidence, guidance, analysis?.calculations)) },
     { role: "user", content: user },
   ]);
   try {
@@ -766,23 +759,27 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     let budget = GLOBAL_REGEN_CAP;
     let rounds = 0;
     let stillFailing = 0;
+    let reviewIncomplete = false;
+    const verdict = new Map<number, { index: number; pass: boolean; issues: string[] }>();
+    let dirty = current.map((_, i) => i);
 
     for (let round = 0; round < MAX_REVIEW_ROUNDS && Date.now() < deadline; round++) {
       rounds = round + 1;
-      let reviews: Array<{ index: number; pass: boolean; issues: string[] }>;
-      try {
-        reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
-      } catch {
-        break; // reviewer unavailable — keep the questions we have
-      }
-      const verdict = new Map(reviews.map((r) => [r.index, r]));
       const local = localIssues(current);
+      const toReview = dirty.filter((i) => !local.has(i));
+      try {
+        const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview);
+        reviews.forEach((r) => verdict.set(r.index, r));
+      } catch {
+        reviewIncomplete = true;
+        break; // Preserve partial work, but never claim an incomplete review passed.
+      }
 
       const failing: Array<{ index: number; issues: string[] }> = [];
       current.forEach((_, i) => {
         const r = verdict.get(i);
         const extra = local.get(i) ?? [];
-        if ((r && !r.pass) || extra.length) failing.push({ index: i, issues: [...(r && !r.pass ? r.issues : []), ...extra] });
+        if ((r && !r.pass) || extra.length || !r) failing.push({ index: i, issues: [...(r && !r.pass ? r.issues : []), ...extra, ...(!r && !extra.length ? ["Verify factual accuracy and ambiguity."] : [])] });
       });
 
       stillFailing = failing.length;
@@ -801,6 +798,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       });
 
       let changed = false;
+      dirty = [];
       todo.forEach((f, k) => {
         const replacement = replacements[k];
         if (!replacement) return;
@@ -814,13 +812,25 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
         /* Keep the planned answer position so the A-D balance is preserved */
         current[f.index] = placeCorrect(replacement, current[f.index].correctIndex);
         regenerated++;
+        verdict.delete(f.index);
+        dirty.push(f.index);
         changed = true;
       });
       if (!changed || budget <= 0) break;
     }
 
+    // Recheck the last repairs too; the round limit must not leave replacements unchecked.
+    if (!reviewIncomplete && regenerated > 0 && dirty.length && Date.now() < deadline) {
+      try {
+        const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty);
+        reviews.forEach((r) => verdict.set(r.index, r));
+      } catch { reviewIncomplete = true; }
+    }
+    const finalLocal = localIssues(current);
+    stillFailing = current.filter((_, i) => finalLocal.has(i) || verdict.get(i)?.pass !== true).length;
     return {
       questions: current.slice(0, requested),
+      reviewIncomplete,
       requested,
       reviewed: questions.length,
       regenerated,
