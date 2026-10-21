@@ -746,8 +746,9 @@ const ReviewInput = z.object({
   spec: StyleSpecSchema.partial().optional(),
 });
 
-const MAX_REVIEW_ROUNDS = 5;
+const MAX_REVIEW_ROUNDS = 3;
 const GLOBAL_REGEN_CAP = 150;
+const REPAIR_PARALLEL = 5;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -756,18 +757,24 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     const { sourceText, questions, difficulty, requested, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
+    const deadline = Date.now() + STEP_DEADLINE_MS;
 
-    /* Questions are never deleted — failing ones are regenerated in place and
-       re-verified, for up to 5 rounds. After that the current version is kept. */
+    /* Questions are never deleted — failing ones are regenerated in place (in parallel)
+       and re-verified, for a few rounds. After that the current version is kept. */
     const current: Question[] = [...questions];
     let regenerated = 0;
     let budget = GLOBAL_REGEN_CAP;
     let rounds = 0;
     let stillFailing = 0;
 
-    for (let round = 0; round < MAX_REVIEW_ROUNDS; round++) {
+    for (let round = 0; round < MAX_REVIEW_ROUNDS && Date.now() < deadline; round++) {
       rounds = round + 1;
-      const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
+      let reviews: Array<{ index: number; pass: boolean; issues: string[] }>;
+      try {
+        reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum);
+      } catch {
+        break; // reviewer unavailable — keep the questions we have
+      }
       const verdict = new Map(reviews.map((r) => [r.index, r]));
       const local = localIssues(current);
 
@@ -779,27 +786,37 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       });
 
       stillFailing = failing.length;
-      if (failing.length === 0) break;
+      if (failing.length === 0 || Date.now() >= deadline) break;
+
+      const todo = failing.slice(0, Math.max(0, budget));
+      budget -= todo.length;
+      const snapshot = [...current];
+      const replacements = await pool(todo, REPAIR_PARALLEL, async (f) => {
+        try {
+          const others = snapshot.filter((_, i) => i !== f.index);
+          return await regenerateOne(sourceText, difficulty, analysis, snapshot[f.index], f.issues, others, spec, guidance, curriculum);
+        } catch {
+          return null;
+        }
+      });
 
       let changed = false;
-      for (const f of failing) {
-        if (budget <= 0) break;
-        budget--;
+      todo.forEach((f, k) => {
+        const replacement = replacements[k];
+        if (!replacement) return;
         const others = current.filter((_, i) => i !== f.index);
-        const replacement = await regenerateOne(sourceText, difficulty, analysis, current[f.index], f.issues, others, spec, guidance, curriculum);
-        if (!replacement) continue;
         const dupe = others.some(
           (a) =>
             a.question.toLowerCase().trim() === replacement.question.toLowerCase().trim() ||
             tooSimilar(a, replacement),
         );
-        if (dupe || REFERS_TO_SOURCE.test(replacement.question) || !validateQuestion(replacement, sourceNorm)) continue;
+        if (dupe || REFERS_TO_SOURCE.test(replacement.question) || !validateQuestion(replacement, sourceNorm)) return;
         /* Keep the planned answer position so the A-D balance is preserved */
         current[f.index] = placeCorrect(replacement, current[f.index].correctIndex);
         regenerated++;
         changed = true;
-      }
-      if (!changed) break;
+      });
+      if (!changed || budget <= 0) break;
     }
 
     return {
