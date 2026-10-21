@@ -271,11 +271,13 @@ function GeneratePage() {
       const t2 = performance.now();
       let questions = generated.questions;
       try {
-        ({ questions } = await reviewAndRepair({
+        const checked = await reviewAndRepair({
           data: { sourceText: combined, questions: generated.questions, difficulty, spec, requested: useCount, analysis, guidance, curriculum: curriculumName },
-        }));
+        });
+        questions = checked.questions;
+        if (checked.reviewIncomplete || checked.stillFailing > 0) toast.warning(t("Some questions could not complete all quality checks. Review them before using this quiz."), { duration: 10000 });
       } catch {
-        /* Review is a quality pass — if it fails, keep the generated questions */
+        toast.warning(t("The final quality check could not finish. Your generated questions have been kept; review them before use."), { duration: 10000 });
       }
       mark("Reviewing quiz", t2);
 
