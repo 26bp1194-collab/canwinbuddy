@@ -46,8 +46,8 @@ export function generationBatchSize(remaining: number, advanced = false, longAns
   return Math.max(1, Math.min(remaining, target));
 }
 
-export function hasMathContext(source: string, guidance = "", calculations: string[] = []): boolean {
-  return calculations.length > 0 || /\b(mathematics|maths|physics|chemistry|accounting|economics)\b/i.test(guidance) || /(?:\d\s*[+×÷=^]|[=√∑∫]|\b(formula|equation|calculate|percentage|ratio)\b)/i.test(source);
+export function hasMathContext(source: string, guidance: string | null | undefined = "", calculations: string[] = []): boolean {
+  return calculations.length > 0 || /\b(mathematics|maths|physics|chemistry|accounting|economics)\b/i.test(guidance ?? "") || /(?:\d\s*[+×÷=^]|[=√∑∫]|\b(formula|equation|calculate|percentage|ratio)\b)/i.test(source);
 }
 
 export function uniqueText(items: string[], limit: number): string[] {

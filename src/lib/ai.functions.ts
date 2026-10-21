@@ -693,7 +693,7 @@ async function regenerateOne(
 ): Promise<Question | null> {
   const used = new Set(accepted.map((q) => openerOf(q.question)));
   const duplicate = issues.some((issue) => /duplicat|same concept|different concept|objective/i.test(issue));
-  const evidence = duplicate ? sourceText : selectEvidence(splitSource(sourceText, 2400, 300), [failed.sourceQuote, ...issues]);
+  const evidence = duplicate ? sourceText : selectEvidence(splitSource(sourceText, 2400, 300), [failed.sourceQuote]);
   const user = `Write ONE replacement quiz question.
 
 The following question FAILED review:
@@ -820,7 +820,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     }
 
     // Recheck the last repairs too; the round limit must not leave replacements unchecked.
-    if (dirty.length && Date.now() < deadline) {
+    if (!reviewIncomplete && regenerated > 0 && dirty.length && Date.now() < deadline) {
       try {
         const reviews = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty);
         reviews.forEach((r) => verdict.set(r.index, r));
