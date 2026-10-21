@@ -301,6 +301,24 @@ ${MATH_RULES}${guidanceBlock(guidance)}`;
 
 /* ---------------- 2. Generate ---------------- */
 
+const STYLE_MIX = `QUESTION STYLE MIX: plan a mix of styles across the whole set before writing. Use only styles the source material supports, and never invent facts to fit a style. Styles to draw from:
+1. Direct recall ("What is...", "Which term...").
+2. Statement check: "Which statement is TRUE?", "Which statement is NOT true?", with four full statements as the options (this is how to do true/false inside 4 options).
+3. Fill in the blank: a sentence with ____ and four candidate words or phrases.
+4. Definition to term, and term to definition (the stem gives one, the options give the other).
+5. Scenario or application: a short real-life situation, then "Which concept applies?" or "What happens next?"
+6. Cause and effect: "What is the main result of...", "What causes...".
+7. Odd one out: "Which of these does NOT belong?"
+8. Sequence: "Which step comes first/next?" or "Which event happened earliest?" (only if the source has an order).
+9. Compare and contrast: "How does X differ from Y?"
+10. Calculation: when the source has formulas, worked examples or data, write numerical questions with plausible wrong answers from common mistakes.
+11. For harder sets and exam curricula (SPM, IGCSE, A-Levels, AP, SAT and similar): exam-style stems such as "Which of the following is correct?" and combined-statement options, written in that exam's real wording.
+Mix rules:
+- Sets of 8 or more questions: use at least 4 different styles, and no single style for more than about 40% of the questions.
+- Sets under 8: use at least 2 or 3 different styles.
+- Do not start more than two consecutive questions with the same opening words.
+- Wrong options must be plausible and similar in length to the correct option. Never make the correct option the longest one every time.`;
+
 function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null) {
   const list = (title: string, items?: string[]) => (items?.length ? `\n\n${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : "");
 
