@@ -1,7 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { splitSource, selectEvidence, generationBatchSize, hasMathContext, completeReviewIndexes } from "../src/lib/generation-context.ts";
+import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, completeReviewIndexes, partitionReviews } from "../src/lib/generation-context.ts";
 
 describe("efficient generation without losing evidence", () => {
+  test("9,900-character notes reach prompts verbatim, without duplicated overlap", () => {
+    const source = "Momentum remains constant.\n".repeat(400).slice(0, 9900);
+    const sections = splitEvidenceSource(source);
+    expect(sections.length).toBe(1);
+    expect(selectEvidence(sections, ["Momentum"])).toBe(source);
+  });
+  test("large full-source fallback strips overlap without losing the source tail", () => {
+    const source = "Birds fly over the river.\n".repeat(3000) + "Unique tail objective";
+    expect(selectEvidence(splitEvidenceSource(source), ["Quantum entanglement"])).toBe(source);
+  });
+  test("targeted neighbouring sections join without overlap or lost characters", () => {
+    const source = "x".repeat(50000) + "Momentum conservation" + "y".repeat(50000);
+    const sections = splitEvidenceSource(source);
+    const found = sections.findIndex((s) => s.text.includes("Momentum conservation"));
+    const neighbours = sections.slice(found - 1, found + 2);
+    expect(selectEvidence(sections, ["Momentum conservation"])).toBe(source.slice(neighbours[0].start, neighbours.at(-1).end));
+  });
+  test("missing verdicts retain valid reviews and request only omitted indexes", () => {
+    const verdict = { index: 0, pass: true, issues: [] };
+    const first = partitionReviews([verdict], [0, 1]);
+    expect(first.reviews).toEqual([verdict]);
+    expect(first.missing).toEqual([1]);
+    const next = partitionReviews([{ index: 1, pass: false, issues: ["Wrong result"] }], first.missing);
+    expect(next.missing).toEqual([]);
+    expect(next.reviews[0].pass).toBe(false);
+  });
+  test("duplicate and unexpected verdicts never count as verified questions", () => {
+    const result = partitionReviews([0, 0, 2, 9].map((index) => ({ index, pass: true, issues: [] })), [0, 1, 2]);
+    expect(result.reviews.map((r) => r.index)).toEqual([2]);
+    expect(result.missing).toEqual([0, 1]);
+  });
   test("analysis chunks include the complete source, including its tail", () => {
     const text = "A".repeat(60000) + "Tail objective: momentum conservation";
     const chunks = splitSource(text);
