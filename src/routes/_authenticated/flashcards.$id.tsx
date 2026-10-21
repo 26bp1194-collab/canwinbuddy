@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Shuffle, RotateCcw } fro
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Question } from "@/lib/ai.functions";
+import { getCorrectIndexes } from "@/lib/question-utils";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -160,7 +161,7 @@ function FlashcardsPage() {
               </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl border bg-accent p-6 text-center text-accent-foreground shadow-sm [backface-visibility:hidden] [transform:rotateY(180deg)]">
                 <span className="mb-3 text-xs uppercase tracking-wide opacity-70">{t("Answer")}</span>
-                <p className="text-lg font-semibold break-words">{card.a}</p>
+                <p className="whitespace-pre-line text-lg font-semibold break-words">{card.a}</p>
               </div>
             </div>
           </button>
