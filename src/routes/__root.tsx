@@ -5,6 +5,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
@@ -27,17 +28,18 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
-  useEffect(() => { reportLovableError(error, { boundary: "root" }); }, [error]);
+  const err = error instanceof Error ? error : new Error(String(error));
+  useEffect(() => { reportLovableError(err, { boundary: "root" }); }, [err]);
   // DOM-mutation crashes (browser translation/extensions removing React's text
   // nodes) are recoverable: re-render the tree instead of showing a blank page.
   useEffect(() => {
-    if (error instanceof Error && error.name === "NotFoundError" && /removeChild|insertBefore/.test(error.message)) {
+    if (err.name === "NotFoundError" && /removeChild|insertBefore/.test(err.message)) {
       const id = setTimeout(() => { router.invalidate(); reset(); }, 0);
       return () => clearTimeout(id);
     }
-  }, [error, router, reset]);
+  }, [err, router, reset]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
