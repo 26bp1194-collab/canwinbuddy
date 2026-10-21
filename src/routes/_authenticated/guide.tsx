@@ -78,6 +78,7 @@ const SECTIONS: GuideSection[] = [
       "Simple mode has one switch for short questions and answers.",
       "Advanced mode has sliders for question length, answer length, complexity and obscurity (from explicit to implicit).",
       "Questions come in a mix of styles, such as true-or-false statements, fill in the blank, scenarios, odd one out and calculations, so quizzes feel less repetitive.",
+      "Some questions have two or three options, are true-or-false style, or ask you to select two correct answers.",
       "For maths and science, quizzes can include calculations, equations and word problems at the right level for your age and curriculum.",
       "If your notes cannot support that many questions, the app tells you. You can add more sources or continue with fewer questions.",
       "Press Generate. The AI studies your notes, writes the questions, then checks them against your source before saving.",
@@ -105,6 +106,7 @@ const SECTIONS: GuideSection[] = [
       "In the More menu, Follow-up quiz makes a fresh quiz from the same notes. Choose easier, harder or the same level.",
       "Sources shows the notes and settings the quiz was made from.",
       "Press Flashcards on a quiz to flip through the questions and answers, then mark each card Know it or Still learning.",
+      "Press Study Notes on the Notes step to get a short revision sheet with the points people often forget or mix up first. Copy it or download it as a PDF.",
     ],
   },
   {
@@ -130,6 +132,7 @@ const SECTIONS: GuideSection[] = [
       "Kahoot: create a kahoot, choose Add question, then Import spreadsheet, and upload the .xlsx file.",
       "If a site rejects the file, press Copy instead. Paste the rows into that site's own template, keep the columns in the same order, and upload that file.",
       "Use the Language option to translate the questions before you export.",
+      "Questions with two correct answers export to Kahoot. Blooket and Gimkit exports leave them out.",
     ],
   },
   {
