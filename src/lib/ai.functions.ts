@@ -187,14 +187,16 @@ export function tooSimilar(a: Question, b: Question) {
   return sim >= 0.6;
 }
 
-/* Batch size scales with the requested amount:
-   1-25 → 1 at a time, 26-50 → 2, 51-75 → 3, 76-100 → 4 */
+/* Questions per AI call. Several batches run in parallel each round, and every
+   new question is still checked against all accepted ones for duplicates. */
 function batchSize(count: number) {
-  if (count <= 25) return 1;
-  if (count <= 50) return 2;
-  if (count <= 75) return 3;
-  return 4;
+  if (count <= 5) return count;
+  if (count <= 20) return 5;
+  return 8;
 }
+const PARALLEL_BATCHES = 4;
+/** Generation/review stop starting new AI work after this, so requests always return. */
+const STEP_DEADLINE_MS = 150_000;
 
 /* ---------------- Level / curriculum settings (sent first, every call) ---------------- */
 
