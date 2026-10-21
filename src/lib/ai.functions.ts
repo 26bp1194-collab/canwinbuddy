@@ -89,23 +89,52 @@ const MATH_RULES = `Mathematical notation: write math using Unicode so it render
 - Symbols: √, ∛, π, θ, ×, ÷, ±, ≈, ≠, ≤, ≥, ∞, ∑, ∏, ∫, ∂, Δ, ∈, ∪, ∩, →, ∠, °
 - Never use LaTeX, \\frac, $...$, or markdown math delimiters.`;
 
-async function callAI(messages: Array<{ role: string; content: string }>, json = true) {
+/* Each AI call is capped (no endless hang) and retried once on timeouts / server errors. */
+const AI_TIMEOUT_MS = 75_000;
+async function callAI(messages: Array<{ role: string; content: string }>, json = true, attempt = 0): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const res = await fetch(GATEWAY, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(GATEWAY, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    if (attempt < 1) return callAI(messages, json, attempt + 1);
+    throw new Error(ctrl.signal.aborted ? "The AI took too long to respond. Please try again." : e instanceof Error ? e.message : "AI request failed");
+  }
+  clearTimeout(timer);
   if (res.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
   if (res.status === 402) throw new Error("AI credits exhausted. Please add credits to your workspace.");
+  if (res.status >= 500 && attempt < 1) return callAI(messages, json, attempt + 1);
   if (!res.ok) throw new Error(`AI request failed (${res.status}): ${await res.text()}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content as string;
+  return (data.choices?.[0]?.message?.content as string) ?? "";
+}
+
+/** Runs async jobs with at most `limit` in flight (server allows ~6 outbound calls). */
+async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
 }
 
 function normalize(s: string) {
