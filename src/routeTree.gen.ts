@@ -20,6 +20,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as PlayIdRouteImport } from './routes/play.$id'
 import { Route as AuthenticatedExportIdRouteImport } from './routes/_authenticated/export.$id'
+import { Route as AuthenticatedFlashcardsIdRouteImport } from './routes/_authenticated/flashcards.$id'
 import { Route as AuthenticatedGroupIdRouteImport } from './routes/_authenticated/group.$id'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
 import { Route as AuthenticatedWorksheetIdRouteImport } from './routes/_authenticated/worksheet.$id'
@@ -78,6 +79,12 @@ const AuthenticatedExportIdRoute = AuthenticatedExportIdRouteImport.update({
   path: '/export/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFlashcardsIdRoute =
+  AuthenticatedFlashcardsIdRouteImport.update({
+    id: '/flashcards/$id',
+    path: '/flashcards/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedGroupIdRoute = AuthenticatedGroupIdRouteImport.update({
   id: '/group/$id',
   path: '/group/$id',
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
+  '/flashcards/$id': typeof AuthenticatedFlashcardsIdRoute
   '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/export/$id': typeof AuthenticatedExportIdRoute
+  '/flashcards/$id': typeof AuthenticatedFlashcardsIdRoute
   '/group/$id': typeof AuthenticatedGroupIdRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
@@ -138,6 +147,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/play/$id': typeof PlayIdRoute
   '/_authenticated/export/$id': typeof AuthenticatedExportIdRoute
+  '/_authenticated/flashcards/$id': typeof AuthenticatedFlashcardsIdRoute
   '/_authenticated/group/$id': typeof AuthenticatedGroupIdRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/_authenticated/worksheet/$id': typeof AuthenticatedWorksheetIdRoute
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/play/$id'
     | '/export/$id'
+    | '/flashcards/$id'
     | '/group/$id'
     | '/history/$id'
     | '/worksheet/$id'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/play/$id'
     | '/export/$id'
+    | '/flashcards/$id'
     | '/group/$id'
     | '/history/$id'
     | '/worksheet/$id'
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/play/$id'
     | '/_authenticated/export/$id'
+    | '/_authenticated/flashcards/$id'
     | '/_authenticated/group/$id'
     | '/_authenticated/history/$id'
     | '/_authenticated/worksheet/$id'
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExportIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/flashcards/$id': {
+      id: '/_authenticated/flashcards/$id'
+      path: '/flashcards/$id'
+      fullPath: '/flashcards/$id'
+      preLoaderRoute: typeof AuthenticatedFlashcardsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/group/$id': {
       id: '/_authenticated/group/$id'
       path: '/group/$id'
@@ -320,6 +340,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedExportIdRoute: typeof AuthenticatedExportIdRoute
+  AuthenticatedFlashcardsIdRoute: typeof AuthenticatedFlashcardsIdRoute
   AuthenticatedGroupIdRoute: typeof AuthenticatedGroupIdRoute
   AuthenticatedWorksheetIdRoute: typeof AuthenticatedWorksheetIdRoute
 }
@@ -331,6 +352,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedExportIdRoute: AuthenticatedExportIdRoute,
+  AuthenticatedFlashcardsIdRoute: AuthenticatedFlashcardsIdRoute,
   AuthenticatedGroupIdRoute: AuthenticatedGroupIdRoute,
   AuthenticatedWorksheetIdRoute: AuthenticatedWorksheetIdRoute,
 }
