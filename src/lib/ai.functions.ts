@@ -531,15 +531,13 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const batch = batchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxAttempts = Math.ceil(count / batch) * 2 + 8;
-    let attempts = 0;
+    const maxRounds = Math.ceil(count / (batch * PARALLEL_BATCHES)) * 2 + 4;
+    const deadline = Date.now() + STEP_DEADLINE_MS;
+    let rounds = 0;
     let emptyStreak = 0;
+    let lastError: unknown = null;
 
-    while (validated.length < count && attempts < maxAttempts && pending.length) {
-      attempts++;
-      const slots = pending.slice(0, Math.min(count - validated.length, batch));
-      const need = slots.length;
-
+    const askBatch = async (slots: Slot[]) => {
       const avoid = validated.map((q) => q.question);
       const plan = slots
         .map(
@@ -547,58 +545,66 @@ export const generateQuestions = createServerFn({ method: "POST" })
             `Question ${i + 1}: concept = "${s.concept}"; type = ${s.type}${s.type === "calculation" ? " (must require calculating/applying the formula or data)" : ""}; start the stem with "${s.opener}" (adapt grammar if needed); correctIndex = ${s.answer}.`,
         )
         .join("\n");
-      const userPrompt = `Generate exactly ${need} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
+      const userPrompt = `Generate exactly ${slots.length} quiz question(s) from this source, following this plan in order. Return valid JSON only.\n\nThe whole quiz has ${count} questions; ${validated.filter((q) => getCorrectIndexes(q).length > 1).length} "Select TWO" and ${validated.filter((q) => q.choices.length < 4).length} with 2-3 options are already written.\n${optionRules(count)}\n\nPLAN:\n${plan}${
         avoid.length ? `\n\nDo NOT repeat or test the same concept as any of these already-used questions:\n${avoid.map((q) => `- ${q}`).join("\n")}` : ""
       }\n\nSOURCE:\n"""${sourceText}"""`;
-      let raw: string;
       try {
-        raw = await callAI([
+        const raw = await callAI([
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ]);
+        const parsed = JSON.parse(raw) as { questions?: unknown[] };
+        return { slots, items: Array.isArray(parsed.questions) ? parsed.questions : [] };
       } catch (e) {
-        if (validated.length === 0) throw e;
-        emptyStreak++;
-        if (emptyStreak >= 5) break;
-        continue;
+        lastError = e;
+        return { slots, items: [] as unknown[] };
       }
-      let parsed: { questions: unknown[] };
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        emptyStreak++;
-        if (emptyStreak >= 5) break;
-        continue;
-      }
+    };
+
+    while (validated.length < count && rounds < maxRounds && pending.length && Date.now() < deadline) {
+      rounds++;
+      /* Split the open slots into parallel batches for this round */
+      const open = pending.slice(0, count - validated.length);
+      const groups: Slot[][] = [];
+      for (let k = 0; k < open.length && groups.length < PARALLEL_BATCHES; k += batch) groups.push(open.slice(k, k + batch));
+      const results = await pool(groups, PARALLEL_BATCHES, askBatch);
+
       let addedThisRound = 0;
-      const items = parsed.questions ?? [];
-      for (let k = 0; k < items.length && k < slots.length; k++) {
-        const p = QuestionSchema.safeParse(items[k]);
-        if (!p.success) continue;
-        const q = placeCorrect(p.data, slots[k].answer);
-        if (!validStructure(q, count >= 8)) continue;
-        const isMulti = getCorrectIndexes(q).length > 1;
-        if (isMulti && validated.filter((a) => getCorrectIndexes(a).length > 1).length >= Math.ceil(count * 0.15)) continue;
-        if (q.choices.length < 4 && validated.filter((a) => a.choices.length < 4).length >= (count < 8 ? 1 : Math.ceil(count * 0.25))) continue;
-        const dedupKey = q.question.toLowerCase().trim();
-        if (seen.has(dedupKey)) continue;
-        if (REFERS_TO_SOURCE.test(q.question)) continue;
-        if (!validateQuestion(q, sourceNorm)) continue;
-        if (validated.some((a) => tooSimilar(a, q))) continue;
-        seen.add(dedupKey);
-        validated.push(q);
-        pending.splice(pending.indexOf(slots[k]), 1);
-        addedThisRound++;
-        if (validated.length >= count) break;
+      for (const { slots, items } of results) {
+        for (let k = 0; k < items.length && k < slots.length; k++) {
+          if (validated.length >= count) break;
+          const p = QuestionSchema.safeParse(items[k]);
+          if (!p.success) continue;
+          const q = placeCorrect(p.data, slots[k].answer);
+          if (!validStructure(q, count >= 8)) continue;
+          const isMulti = getCorrectIndexes(q).length > 1;
+          if (isMulti && validated.filter((a) => getCorrectIndexes(a).length > 1).length >= Math.ceil(count * 0.15)) continue;
+          if (q.choices.length < 4 && validated.filter((a) => a.choices.length < 4).length >= (count < 8 ? 1 : Math.ceil(count * 0.25))) continue;
+          const dedupKey = q.question.toLowerCase().trim();
+          if (seen.has(dedupKey)) continue;
+          if (REFERS_TO_SOURCE.test(q.question)) continue;
+          if (!validateQuestion(q, sourceNorm)) continue;
+          if (validated.some((a) => tooSimilar(a, q))) continue;
+          seen.add(dedupKey);
+          validated.push(q);
+          const at = pending.indexOf(slots[k]);
+          if (at >= 0) pending.splice(at, 1);
+          addedThisRound++;
+        }
       }
-      // A slot that failed twice gets a fresh concept so the run doesn't stall on it
-      if (addedThisRound === 0 && pending.length) {
-        const s = pending.shift()!;
-        const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
-        pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+      /* Slots that failed get a fresh concept so the run doesn't stall on them */
+      for (const g of groups) {
+        for (const s of g) {
+          const at = pending.indexOf(s);
+          if (at < 0) continue;
+          pending.splice(at, 1);
+          const alt = analysis?.concepts?.find((c) => !validated.some((q) => normalize(q.question).includes(normalize(c))));
+          pending.push({ ...s, concept: alt ?? "any untested part of the notes" });
+        }
       }
+      if (validated.length === 0 && lastError && addedThisRound === 0 && rounds >= 2) throw lastError;
       emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
-      if (emptyStreak >= 5) break;
+      if (emptyStreak >= 3) break;
     }
 
     if (validated.length === 0) {
