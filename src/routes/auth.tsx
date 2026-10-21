@@ -175,6 +175,12 @@ function AuthPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {t === "signup" && (
+                  <p className="text-xs text-muted-foreground">
+                    At least 6 characters. New passwords are checked against an index of known breached
+                    passwords, so common ones (names, "123", dictionary words) are rejected.
+                  </p>
+                )}
               </div>
               <Button type="submit" disabled={busy} className="w-full" size="lg">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t === "signup" ? "Create account" : "Log in"}
