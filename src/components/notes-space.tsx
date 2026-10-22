@@ -84,10 +84,10 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
   return <>
     <div className="overflow-hidden rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
       {sources.length > 0 && <div className="flex flex-wrap items-start gap-2 border-b border-border p-3" aria-label="Inserted sources">
-        {sources.map((s) => <div key={s.id} className={s.kind === "paste" ? "relative h-28 w-28 shrink-0 rounded-lg border border-border bg-secondary" : "flex max-w-full items-center gap-1 rounded-lg border border-border bg-secondary pl-3"}>
+        {sources.map((s) => <div key={s.id} className={s.kind === "paste" ? "relative h-28 w-28 shrink-0 rounded-lg border border-border bg-secondary" : s.kind === "file" ? "flex w-64 max-w-full flex-wrap items-center gap-1 rounded-lg border border-border bg-secondary pl-3" : "flex max-w-full items-center gap-1 rounded-lg border border-border bg-secondary pl-3"}>
           {s.kind === "paste" ? <Button variant="ghost" className="h-full w-full flex-col items-start justify-start gap-2 overflow-hidden p-3 text-left" aria-label={`Open ${s.name}`} onClick={() => { setSelected(s); setEditing(false); setEditText(s.text); }}>
             <FileText className="h-4 w-4 shrink-0 text-primary" /><span className="line-clamp-2 whitespace-normal break-words pr-2 text-xs">{s.text}</span><span className="text-xs text-muted-foreground">{s.text.length} characters</span>
-          </Button> : <span className="flex min-w-0 items-center gap-2 text-sm">
+          </Button> : <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
             {s.kind === "topics" ? <List className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
             <span className="truncate" title={s.kind === "topics" ? s.text : s.name}>{s.kind === "topics" ? topicsPreview(s.topics ?? parseTopics(s.text)) : s.name}</span>
           </span>}
