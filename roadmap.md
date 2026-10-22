@@ -9,6 +9,7 @@
 - [x] Quiz variety add-on: question style mix in generation and review prompts
 
 ## Open
+- [ ] Smarter uploads: structured extraction, DOCX tables/images markers, sheet labels, unreadable handling, shared source prompts, editable file text and Guide; verify available fixtures and report unverified AI/PDF checks
 - [ ] Verify a 9,900-character quiz end-to-end — blocked until the requesting user logs in; managed sign-in found no matching account
 - [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
 - [ ] Worksheet file uploads, share links, dashboard worksheet stats, flashcards, Anki/Quizlet export, PDF math rendering — proposed improvements awaiting user pick
