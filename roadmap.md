@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Done
+- [x] Disable highlighting outside editable fields; adaptive five/ten-question generation with exact remainders and five rolling generation/review/repair requests; reuse source indexing across review and repair; 27 tests pass and sign-up selection verified
 - [x] Generation fixes: remove known evidence overlap, keep small sources verbatim, condense analysis wording, review in groups of eight, preserve valid partial verdicts with one omitted-index follow-up; 21 regression tests pass
 - [x] Full generation optimization: lossless source indexing, adaptive batches, concise prompts, code-first checks and targeted re-review; authenticated 10-question generation displayed and temporary account deleted
 - [x] Compact Notes Space: unified editor, "+" menu (files, topics), source bubbles with confirm-remove, compact paste bubbles (≥300 chars) with side editor
@@ -8,7 +9,6 @@
 - [x] Quiz variety add-on: question style mix in generation and review prompts
 
 ## Open
-- [ ] Disable highlighting outside editable fields; implement adaptive five/ten-question batches and five concurrent generation/review/repair requests; add one small generation optimization and verify
 - [ ] Verify a 9,900-character quiz end-to-end — blocked until the requesting user logs in; managed sign-in found no matching account
 - [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
 - [ ] Worksheet file uploads, share links, dashboard worksheet stats, flashcards, Anki/Quizlet export, PDF math rendering — proposed improvements awaiting user pick
