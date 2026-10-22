@@ -10,9 +10,10 @@
 - [x] Quiz variety add-on: question style mix in generation and review prompts
 
 ## Open
-- [ ] Test most generation features using the requesting user's signed-in temporary account; report observed results and failures without changing generation behavior
-- [ ] Smarter uploads end-to-end AI checks (Lily quiz, table/diagram/blank-image uploads, same-upload worksheet/Study Notes, 10+ page PDF completeness/timeout) — blocked by no requesting-user session; full PDF extraction is requested in the prompt but not verified
-- [ ] Verify a 9,900-character quiz end-to-end — blocked until the requesting user logs in; managed sign-in found no matching account
+- [x] Tested most generation features with the requesting user's temporary account; live results and limitations recorded in GENERATION_TEST_RESULTS.md; no application behavior changed
+- [x] Smarter uploads live checks: Lily quiz, table/chart/blank image extraction, DOCX/XLSX, same-upload worksheet/Study Notes and all ten PDF pages verified; standalone chart/XLSX quizzes remain untested
+- [x] Verified 9,900-character advanced quiz end-to-end: first attempt timed out; confirmed-settings retry saved and reopened 23/25 questions in 252 seconds with warnings
+- [ ] Fix reproduced generation issues — awaiting user approval to change behavior: customisation resets on navigation, excessive analysis/refinement output, incomplete review and non-self-contained/repetitive questions, inconsistent worksheet instructions (see GENERATION_TEST_RESULTS.md)
 - [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
 - [ ] Worksheet file uploads, share links, dashboard worksheet stats, flashcards, Anki/Quizlet export, PDF math rendering — proposed improvements awaiting user pick
 - [ ] One security finding left open (user scoped the fix to a single finding)
