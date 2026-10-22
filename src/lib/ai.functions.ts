@@ -93,13 +93,14 @@ const MATH_RULES = `Mathematical notation: write math using Unicode so it render
 
 /* Bound the complete response, with SDK-safe retries only; never replay an unknown outcome. */
 const AI_TIMEOUT_MS = 75_000;
-async function callAI(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, json = true): Promise<string> {
+async function callAI(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, json = true, opts: { maxTokens?: number; timeoutMs?: number } = {}): Promise<string> {
   try {
     const result = await generateChatCompletion({
       model: MODEL,
       messages,
       ...(json ? { response_format: { type: "json_object" as const } } : {}),
-    }, { signal: AbortSignal.timeout(AI_TIMEOUT_MS) });
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+    }, { signal: AbortSignal.timeout(opts.timeoutMs ?? AI_TIMEOUT_MS) });
     const content = result.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("The AI returned no content. Please try again.");
     return content;
@@ -320,13 +321,14 @@ Apply these reading/planning rules within the existing analysis fields; do not a
 - Keep concept/topic labels brief; avoid repeating the same label across concepts, topics and keyTerms unless needed. Preserve every distinct testable concept, exact defined terms, objectives, formulas and numeric data; brevity must not remove coverage.
 - Use ONLY the provided notes. Never add outside knowledge.
 ${MATH_RULES}${guidanceBlock(guidance)}`;
-    const chunks = splitSource(sourceText);
+    /* Smaller sections and a bounded output keep each analysis call well inside its time limit. */
+    const chunks = splitSource(sourceText, 8000, 400);
     const results = await pool(chunks, 3, async (chunk) => {
     const user = `Source section ${chunk.id + 1}/${chunks.length}. Analyse only this section. Requested difficulty: ${difficulty}${count ? `\nPlanned question count: ${count}` : ""}\n\nNOTES:\n"""${chunk.text}"""`;
     const raw = await callAI([
       { role: "system", content: system },
       { role: "user", content: user },
-    ]);
+    ], true, { maxTokens: 8000, timeoutMs: 100_000 });
     try {
       return AnalysisSchema.parse(JSON.parse(raw));
     } catch {
@@ -780,21 +782,22 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       try {
         const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview, sections, deadline);
         checked.reviews.forEach((r) => verdict.set(r.index, r));
-        if (checked.incomplete) { reviewIncomplete = true; break; }
       } catch {
         reviewIncomplete = true;
         break; // Preserve partial work, but never claim an incomplete review passed.
       }
 
+      /* Unreviewed questions are re-reviewed next round, not regenerated blindly. */
+      const unreviewed = toReview.filter((i) => !verdict.has(i));
       const failing: Array<{ index: number; issues: string[] }> = [];
       current.forEach((_, i) => {
         const r = verdict.get(i);
         const extra = local.get(i) ?? [];
-        if ((r && !r.pass) || extra.length || !r) failing.push({ index: i, issues: [...(r && !r.pass ? r.issues : []), ...extra, ...(!r && !extra.length ? ["Verify factual accuracy and ambiguity."] : [])] });
+        if ((r && !r.pass) || extra.length) failing.push({ index: i, issues: [...(r && !r.pass ? r.issues : []), ...extra] });
       });
 
-      stillFailing = failing.length;
-      if (failing.length === 0 || Date.now() >= deadline) break;
+      stillFailing = failing.length + unreviewed.length;
+      if ((failing.length === 0 && unreviewed.length === 0) || Date.now() >= deadline) break;
 
       const todo = failing.slice(0, Math.max(0, budget));
       budget -= todo.length;
@@ -810,7 +813,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       });
 
       let changed = false;
-      dirty = [];
+      dirty = [...unreviewed];
       todo.forEach((f, k) => {
         const replacement = replacements[k];
         if (!replacement) return;
@@ -828,18 +831,20 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
         dirty.push(f.index);
         changed = true;
       });
-      if (!changed || budget <= 0) break;
+      if ((!changed && !unreviewed.length) || budget <= 0) break;
     }
 
     // Recheck the last repairs too; the round limit must not leave replacements unchecked.
-    if (!reviewIncomplete && regenerated > 0 && dirty.length && Date.now() < deadline) {
+    const recheck = dirty.filter((i) => !verdict.has(i));
+    if (!reviewIncomplete && recheck.length && Date.now() < deadline) {
       try {
-        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty, sections, deadline);
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, recheck, sections, deadline);
         checked.reviews.forEach((r) => verdict.set(r.index, r));
-        reviewIncomplete = checked.incomplete;
       } catch { reviewIncomplete = true; }
     }
     const finalLocal = localIssues(current);
+    // Incomplete means some question still lacks a reviewer verdict.
+    if (current.some((_, i) => !finalLocal.has(i) && !verdict.has(i))) reviewIncomplete = true;
     stillFailing = current.filter((_, i) => finalLocal.has(i) || verdict.get(i)?.pass !== true).length;
     return {
       questions: current.slice(0, requested),
@@ -894,7 +899,7 @@ export const aiTextHelper = createServerFn({ method: "POST" })
     const base = `You are a writing assistant that produces study/reference text suitable for generating quiz questions from. Rules:
 - Return ONLY the finished text as plain prose. No preamble, no markdown headers, no commentary, no quotes.
 - Prefer clear factual sentences, concrete details, definitions, dates, names, numbers.
-${VOLUME}
+${mode === "source-finder" ? VOLUME : "- FACT-CHECK EVERYTHING: correct anything wrong and drop claims you cannot stand behind. Never invent statistics, quotes or citations."}
 ${MATH_RULES}`;
 
     let system: string;
@@ -938,7 +943,7 @@ ${MATH_RULES}`;
       system = `${base}
 - You are in REFINE & CHECK mode: rewrite the user's existing source text according to the requested actions while preserving its meaning and all accurate facts.
 - Return the full rewritten text, not a diff or a summary.
-- Expand the text with further accurate, fact-checked, closely related detail where needed so it can support at least 150 quiz questions.`;
+- Keep roughly the original length and scope: at most about 1.5× the original word count (minimum 150 words), unless the user's custom instruction explicitly asks for more. Do not add new topics.`;
       user = `What this text is about: ${context || "(not provided)"}\n\nRequested actions:\n${asked
         .map((a) => `- ${a}`)
         .join("\n")}\n\nAdditional context: ${instruction}${planBlock(

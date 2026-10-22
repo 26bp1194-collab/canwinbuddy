@@ -54,6 +54,7 @@ ${FORMAT_GUIDES}
 Ground every question in the provided source text and/or topics. When source text is given, facts must come from it.
 TERM CONSISTENCY: use named terms exactly as they first appear in the source, in the same singular form and spelling.
 Write math with Unicode (x², ½, √, π), never LaTeX.
+CONSISTENCY: the paper title, level/stage label, instructions and questions must all name ONLY the chosen curriculum (never substitute another programme, e.g. no "Cambridge Primary" or "Lower Secondary Stage" when the curriculum is IGCSE — keep the IGCSE name and simplify difficulty for the age instead). Every rule must be stated once and never contradicted (e.g. calculator allowed vs not allowed, time, total marks); make the heading and instructions agree.
 ${SCHEMA_HINT}`;
     const user = `Curriculum: ${data.curriculum}
 Subject: ${data.subject}
