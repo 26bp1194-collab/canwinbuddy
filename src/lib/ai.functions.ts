@@ -835,9 +835,10 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     }
 
     // Recheck the last repairs too; the round limit must not leave replacements unchecked.
-    if (!reviewIncomplete && dirty.length && Date.now() < deadline) {
+    const recheck = dirty.filter((i) => !verdict.has(i));
+    if (!reviewIncomplete && recheck.length && Date.now() < deadline) {
       try {
-        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty.filter((i) => !verdict.has(i)), sections, deadline);
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, recheck, sections, deadline);
         checked.reviews.forEach((r) => verdict.set(r.index, r));
       } catch { reviewIncomplete = true; }
     }
