@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, completeReviewIndexes, partitionReviews } from "../src/lib/generation-context.ts";
+import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, completeReviewIndexes, partitionReviews, pool, QUIZ_CONCURRENCY } from "../src/lib/generation-context.ts";
 
 describe("efficient generation without losing evidence", () => {
   test("9,900-character notes reach prompts verbatim, without duplicated overlap", () => {
@@ -51,10 +51,37 @@ describe("efficient generation without losing evidence", () => {
     const sections = Array.from({ length: 15 }, (_, id) => ({ id, text: `Section ${id} birds fly` }));
     expect(selectEvidence(sections, ["Quantum entanglement"])).toContain("Section 14 birds fly");
   });
-  test("100-question requests use bounded batches; detailed advanced answers use smaller batches", () => {
-    expect(generationBatchSize(100)).toBe(10);
-    expect(generationBatchSize(100, true, true)).toBe(5);
-    expect(generationBatchSize(3)).toBe(3);
+  for (const [count, expected] of [[25, [5, 5, 5, 5, 5]], [50, [10, 10, 10, 10, 10]], [100, Array(10).fill(10)], [17, [5, 5, 5, 2]], [47, [10, 10, 10, 10, 7]], [3, [3]]]) {
+    test(`${count} questions use preferred batches and an exact remainder`, () => {
+      const size = generationBatchSize(count);
+      const sizes = Array.from({ length: Math.ceil(count / size) }, (_, i) => Math.min(size, count - i * size));
+      expect(sizes).toEqual(expected);
+      expect(sizes.reduce((a, b) => a + b, 0)).toBe(count);
+    });
+  }
+  test("generation, review and repair share a five-request rolling limit", async () => {
+    expect(QUIZ_CONCURRENCY).toBe(5);
+    const started = [];
+    const release = new Map();
+    let active = 0;
+    let peak = 0;
+    const done = pool(Array.from({ length: 10 }, (_, i) => i), QUIZ_CONCURRENCY, async (i) => {
+      started.push(i);
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => release.set(i, resolve));
+      active--;
+      return i;
+    });
+    expect(started).toEqual([0, 1, 2, 3, 4]);
+    release.get(1)();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toEqual([0, 1, 2, 3, 4, 5]);
+    for (const i of [0, 2, 3, 4, 5]) release.get(i)();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const i of [6, 7, 8, 9]) release.get(i)();
+    expect(await done).toEqual(Array.from({ length: 10 }, (_, i) => i));
+    expect(peak).toBe(5);
   });
   test("math rules remain active for formulas and mathematical subjects", () => {
     expect(hasMathContext("speed = distance / time")).toBe(true);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
 import { generateChatCompletion, GatewayError } from "@lovable.dev/ai-gateway";
-import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, partitionReviews } from "./generation-context";
+import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, partitionReviews, pool, QUIZ_CONCURRENCY, type SourceSection } from "./generation-context";
 
 const QuestionSchema = z
   .object({
@@ -113,21 +113,6 @@ async function callAI(messages: Array<{ role: "system" | "user" | "assistant"; c
   }
 }
 
-/** Runs async jobs with at most `limit` in flight (server allows ~6 outbound calls). */
-async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]);
-      }
-    }),
-  );
-  return out;
-}
-
 function normalize(s: string) {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\p{L}\p{N} ]/gu, "").trim();
 }
@@ -180,7 +165,7 @@ export function tooSimilar(a: Question, b: Question) {
 
 /* Questions per AI call. Several batches run in parallel each round, and every
    new question is still checked against all accepted ones for duplicates. */
-const PARALLEL_BATCHES = 4;
+const PARALLEL_BATCHES = QUIZ_CONCURRENCY;
 /** Generation/review stop starting new AI work after this, so requests always return. */
 const STEP_DEADLINE_MS = 150_000;
 
@@ -514,7 +499,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const systemPrompt = genSystemPrompt(difficulty, analysis, spec, guidance, curriculum, hasMathContext(sourceText, guidance, analysis?.calculations));
 
     const pending: Slot[] = buildBlueprint(count, difficulty, analysis, spec);
-    let batch = generationBatchSize(count, spec?.mode === "advanced", spec?.mode === "advanced" && ((spec.questionLength ?? 3) >= 4 || (spec.answerLength ?? 3) >= 4), sourceText.length);
+    let batch = generationBatchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
     const maxRounds = Math.ceil(count / (batch * PARALLEL_BATCHES)) * 2 + 4;
@@ -551,14 +536,15 @@ export const generateQuestions = createServerFn({ method: "POST" })
 
     while (validated.length < count && rounds < maxRounds && pending.length && Date.now() < deadline) {
       rounds++;
-      /* Split the open slots into parallel batches for this round */
+      /* Queue the whole round; refill a free request slot as soon as a batch finishes. */
       const open = pending.slice(0, count - validated.length);
       const groups: Slot[][] = [];
-      for (let k = 0; k < open.length && groups.length < PARALLEL_BATCHES; k += batch) groups.push(open.slice(k, k + batch));
-      const results = await pool(groups, PARALLEL_BATCHES, askBatch);
-
+      for (let k = 0; k < open.length; k += batch) groups.push(open.slice(k, k + batch));
       let addedThisRound = 0;
-      for (const { slots, items } of results) {
+      await pool(groups, PARALLEL_BATCHES, async (group) => {
+        if (Date.now() >= deadline) return;
+        const { slots, items } = await askBatch(group);
+        // Commit synchronously before the next queued batch builds its avoidance context.
         for (let k = 0; k < items.length && k < slots.length; k++) {
           if (validated.length >= count) break;
           const p = QuestionSchema.safeParse(items[k]);
@@ -579,8 +565,8 @@ export const generateQuestions = createServerFn({ method: "POST" })
           if (at >= 0) pending.splice(at, 1);
           addedThisRound++;
         }
-      }
-      /* Slots that failed get a fresh concept so the run doesn't stall on them */
+      });
+      /* Move failed slots behind unattempted slots without losing their assigned concepts. */
       for (const g of groups) {
         for (const s of g) {
           const at = pending.indexOf(s);
@@ -590,7 +576,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
           pending.push(s);
         }
       }
-      if (addedThisRound < open.slice(0, batch * PARALLEL_BATCHES).length / 2) batch = Math.max(3, Math.floor(batch / 2));
+      if (addedThisRound < open.length / 2) batch = Math.min(batch, 5);
       emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
       if (emptyStreak >= 3) break;
     }
@@ -638,8 +624,7 @@ function mustCoverList(analysis?: Analysis | null): string[] {
   return [...(analysis.objectives ?? []), ...(analysis.keyTerms ?? [])];
 }
 
-async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, indexes = questions.map((_, i) => i)) {
-  const sections = splitEvidenceSource(sourceText);
+async function reviewBatch(sourceText: string, questions: Question[], difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, indexes = questions.map((_, i) => i), sections = splitEvidenceSource(sourceText), deadline = Infinity) {
   const groups: number[][] = [];
   for (let i = 0; i < indexes.length; i += 8) groups.push(indexes.slice(i, i + 8));
   const overview = questions.map((q, index) => ({ index, question: q.question, answers: getCorrectIndexes(q).map((i) => q.choices[i]) }));
@@ -653,13 +638,15 @@ async function reviewBatch(sourceText: string, questions: Question[], difficulty
     const parsed = ReviewSchema.parse(JSON.parse(raw));
     return partitionReviews(parsed.reviews, group);
   };
-  const results = await pool(groups, 3, async (group) => {
+  const results = await pool(groups, QUIZ_CONCURRENCY, async (group) => {
     // Recover omitted verdicts once, without replaying a failed/unknown AI request.
     let kept: z.infer<typeof ReviewSchema>["reviews"] = [];
     try {
+      if (Date.now() >= deadline) return { reviews: kept, incomplete: true };
       const first = await check(group);
       kept = first.reviews;
       if (!first.missing.length) return { reviews: kept, incomplete: false };
+      if (Date.now() >= deadline) return { reviews: kept, incomplete: true };
       const followUp = await check(first.missing);
       return { reviews: [...kept, ...followUp.reviews], incomplete: followUp.missing.length > 0 };
     } catch {
@@ -704,10 +691,11 @@ async function regenerateOne(
   spec?: Partial<StyleSpec> | null,
   guidance?: string | null,
   curriculum?: string | null,
+  sections?: SourceSection[],
 ): Promise<Question | null> {
   const used = new Set(accepted.map((q) => openerOf(q.question)));
   const duplicate = issues.some((issue) => /duplicat|same concept|different concept|objective/i.test(issue));
-  const evidence = duplicate ? sourceText : selectEvidence(splitEvidenceSource(sourceText), [failed.sourceQuote]);
+  const evidence = duplicate ? sourceText : selectEvidence(sections ?? splitEvidenceSource(sourceText), [failed.sourceQuote]);
   const user = `Write ONE replacement quiz question.
 
 The following question FAILED review:
@@ -755,7 +743,7 @@ const ReviewInput = z.object({
 
 const MAX_REVIEW_ROUNDS = 3;
 const GLOBAL_REGEN_CAP = 150;
-const REPAIR_PARALLEL = 5;
+const REPAIR_PARALLEL = QUIZ_CONCURRENCY;
 
 export const reviewAndRepair = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -764,6 +752,8 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     const { sourceText, questions, difficulty, requested, spec, guidance, curriculum } = data;
     const analysis = (data.analysis ?? null) as Analysis | null;
     const sourceNorm = normalize(sourceText);
+    // Index the source once for all review groups and repair rounds.
+    const sections = splitEvidenceSource(sourceText);
     const deadline = Date.now() + STEP_DEADLINE_MS;
 
     /* Questions are never deleted — failing ones are regenerated in place (in parallel)
@@ -782,7 +772,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       const local = localIssues(current);
       const toReview = dirty.filter((i) => !local.has(i));
       try {
-        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview);
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, toReview, sections, deadline);
         checked.reviews.forEach((r) => verdict.set(r.index, r));
         if (checked.incomplete) { reviewIncomplete = true; break; }
       } catch {
@@ -805,8 +795,9 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
       const snapshot = [...current];
       const replacements = await pool(todo, REPAIR_PARALLEL, async (f) => {
         try {
+          if (Date.now() >= deadline) return null;
           const others = snapshot.filter((_, i) => i !== f.index);
-          return await regenerateOne(sourceText, difficulty, analysis, snapshot[f.index], f.issues, others, spec, guidance, curriculum);
+          return await regenerateOne(sourceText, difficulty, analysis, snapshot[f.index], f.issues, others, spec, guidance, curriculum, sections);
         } catch {
           return null;
         }
@@ -837,7 +828,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
     // Recheck the last repairs too; the round limit must not leave replacements unchecked.
     if (!reviewIncomplete && regenerated > 0 && dirty.length && Date.now() < deadline) {
       try {
-        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty);
+        const checked = await reviewBatch(sourceText, current, difficulty, analysis, spec, guidance, curriculum, dirty, sections, deadline);
         checked.reviews.forEach((r) => verdict.set(r.index, r));
         reviewIncomplete = checked.incomplete;
       } catch { reviewIncomplete = true; }

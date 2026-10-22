@@ -151,11 +151,18 @@
   * { border-color: var(--color-border); }
   html, body { height: 100%; }
   body {
+    -webkit-user-select: none;
+    user-select: none;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
+  }
+  input, textarea, [contenteditable]:not([contenteditable="false"]),
+  [contenteditable]:not([contenteditable="false"]) * {
+    -webkit-user-select: text;
+    user-select: text;
   }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
