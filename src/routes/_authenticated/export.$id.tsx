@@ -237,7 +237,7 @@ function ExportPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {questions.length} {t("verified questions · ready to export")}
+            {questions.length} {t("questions · ready to export")}
           </p>
         </div>
         {timing && (

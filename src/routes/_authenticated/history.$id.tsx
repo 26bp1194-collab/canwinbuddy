@@ -76,7 +76,7 @@ function HistoryDetail() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{questions.length} {t("verified questions")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{questions.length} {t("questions")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setPlaying(true)}>
