@@ -30,6 +30,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const { theme, toggle } = useTheme();
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"signin" | "signup">("signin");
