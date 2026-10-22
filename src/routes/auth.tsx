@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { isUsernameTaken } from "@/lib/username.functions";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Loader2, Eye, EyeOff, Sun, Moon } from "lucide-react";
 import { toast } from "sonner";
+import { useTheme } from "@/lib/theme";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, usernameToEmail, USERNAME_RE } from "@/lib/auth-context";
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const { theme, toggle } = useTheme();
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"signin" | "signup">("signin");
@@ -110,6 +112,15 @@ function AuthPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        className="fixed bottom-4 left-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
+      >
+        {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </button>
       <div className="pointer-events-none absolute inset-0 opacity-70">
         <div className="absolute -top-40 left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-primary/25 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-primary-glow/15 blur-3xl" />
