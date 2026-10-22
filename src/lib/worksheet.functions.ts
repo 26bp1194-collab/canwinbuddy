@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WorksheetContent } from "./worksheet-types";
+import { SOURCE_HANDLING_RULES } from "./source-handling-rules";
 
 const InputSchema = z
   .object({
@@ -48,6 +49,7 @@ export const generateWorksheet = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("AI is not configured");
     const system = `You are an expert exam setter who writes printable school worksheets that look exactly like real ${data.curriculum} papers.
+${SOURCE_HANDLING_RULES}
 ${FORMAT_GUIDES}
 Ground every question in the provided source text and/or topics. When source text is given, facts must come from it.
 TERM CONSISTENCY: use named terms exactly as they first appear in the source, in the same singular form and spelling.
