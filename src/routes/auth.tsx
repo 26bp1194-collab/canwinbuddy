@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { isUsernameTaken } from "@/lib/username.functions";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Loader2, Eye, EyeOff, Sun, Moon } from "lucide-react";
 import { toast } from "sonner";
+import { useTheme } from "@/lib/theme";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, usernameToEmail, USERNAME_RE } from "@/lib/auth-context";
