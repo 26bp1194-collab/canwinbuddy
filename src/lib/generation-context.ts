@@ -59,9 +59,25 @@ export function selectEvidence(sections: SourceSection[], targets: string[], max
   return joinEvidence(sections.filter((s) => selected.has(s.id)));
 }
 
-export function generationBatchSize(remaining: number, advanced = false, longAnswers = false, evidenceLength = 0): number {
-  const target = longAnswers ? 5 : advanced || evidenceLength > 24000 ? 8 : 10;
-  return Math.max(1, Math.min(remaining, target));
+export const QUIZ_CONCURRENCY = 5;
+
+/** Prefer five-question calls; larger sets use ten with exact final remainders. */
+export function generationBatchSize(count: number): number {
+  return Math.max(1, Math.min(count, count <= 25 ? 5 : 10));
+}
+
+/** Refill a free slot immediately, rather than waiting for the slowest job in a wave. */
+export async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 6) throw new Error("Concurrency must be between 1 and 6");
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }));
+  return out;
 }
 
 export function hasMathContext(source: string, guidance: string | null | undefined = "", calculations: string[] = []): boolean {
