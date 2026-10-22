@@ -10,11 +10,13 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { parseFile } from "@/lib/file-parse";
 import { listKeyDown } from "@/lib/list-input";
 import { getQuickSourceDelete, parseTopics, shouldCompactPaste, topicsPreview, type NoteSource } from "@/lib/note-sources";
+import { useT } from "@/lib/i18n";
 
 type VerifiedFile = { name: string; text: string; status: "checking" | "ready" | "error"; error?: string };
 type Props = { source: string; onSourceChange: (v: string) => void; sources: NoteSource[]; onSourcesChange: (v: NoteSource[]) => void };
 
 export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }: Props) {
+  const t = useT();
   const [dialog, setDialog] = useState<"files" | "topics" | null>(null);
   const [input, setInput] = useState("");
   const [verifiedFiles, setVerifiedFiles] = useState<VerifiedFile[]>([]);
@@ -53,7 +55,7 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
       let result: VerifiedFile;
       try {
         if (file.size > 20 * 1024 * 1024) throw new Error("File exceeds 20 MB.");
-        const text = await parseFile(file);
+        const text = await parseFile(file, (warning) => { if (version === requestVersion.current) toast.warning(t(warning)); });
         if (!text.trim()) throw new Error("No readable text was found in this file.");
         result = { name: file.name, text, status: "ready" };
       } catch (error) {
@@ -82,14 +84,18 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
   return <>
     <div className="overflow-hidden rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
       {sources.length > 0 && <div className="flex flex-wrap items-start gap-2 border-b border-border p-3" aria-label="Inserted sources">
-        {sources.map((s) => <div key={s.id} className={s.kind === "paste" ? "relative h-28 w-28 shrink-0 rounded-lg border border-border bg-secondary" : "flex max-w-full items-center gap-1 rounded-lg border border-border bg-secondary pl-3"}>
+        {sources.map((s) => <div key={s.id} className={s.kind === "paste" ? "relative h-28 w-28 shrink-0 rounded-lg border border-border bg-secondary" : s.kind === "file" ? "flex w-64 max-w-full flex-wrap items-center gap-1 rounded-lg border border-border bg-secondary pl-3" : "flex max-w-full items-center gap-1 rounded-lg border border-border bg-secondary pl-3"}>
           {s.kind === "paste" ? <Button variant="ghost" className="h-full w-full flex-col items-start justify-start gap-2 overflow-hidden p-3 text-left" aria-label={`Open ${s.name}`} onClick={() => { setSelected(s); setEditing(false); setEditText(s.text); }}>
             <FileText className="h-4 w-4 shrink-0 text-primary" /><span className="line-clamp-2 whitespace-normal break-words pr-2 text-xs">{s.text}</span><span className="text-xs text-muted-foreground">{s.text.length} characters</span>
-          </Button> : <span className="flex min-w-0 items-center gap-2 text-sm">
+          </Button> : <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
             {s.kind === "topics" ? <List className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
             <span className="truncate" title={s.kind === "topics" ? s.text : s.name}>{s.kind === "topics" ? topicsPreview(s.topics ?? parseTopics(s.text)) : s.name}</span>
           </span>}
           <Button type="button" variant="ghost" size="icon" className={s.kind === "paste" ? "absolute right-0 top-0 h-7 w-7" : "h-8 w-8 shrink-0"} title="Remove source" aria-label={`Remove ${s.name}`} onClick={() => remove(s.id)}><X className="h-3.5 w-3.5" /></Button>
+          {s.kind === "file" && <details className="min-w-0 basis-full p-2">
+            <summary className="cursor-pointer text-xs text-primary">{t("View text")}</summary>
+            <Textarea aria-label={`${t("Edit extracted text")}: ${s.name}`} className="mt-2 min-h-40 w-full resize-y" value={s.text} onChange={(e) => onSourcesChange(sources.map((item) => item.id === s.id ? { ...item, text: e.target.value } : item))} />
+          </details>}
         </div>)}
       </div>}
       <Textarea ref={textarea} id="src" value={source} onChange={(e) => onSourceChange(e.target.value)} onKeyDown={(e) => listKeyDown(e, onSourceChange)}
@@ -115,13 +121,15 @@ export function NotesSpace({ source, onSourceChange, sources, onSourcesChange }:
           <input ref={fileInput} type="file" className="hidden" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,image/*" onChange={(e) => { void verifyFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
           <div className="space-y-2">{verifiedFiles.map((f, i) => <div key={i} className="flex items-start gap-2 rounded-lg bg-secondary p-3 text-sm">
             {f.status === "checking" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : f.status === "ready" ? <Check className="h-4 w-4 shrink-0 text-success" /> : <X className="h-4 w-4 shrink-0 text-destructive" />}
-            <div className="min-w-0 flex-1"><p className="truncate">{f.name}</p><p className={f.status === "error" ? "break-words text-xs text-destructive" : "text-xs text-muted-foreground"}>{f.status === "checking" ? "Checking access…" : f.status === "ready" ? "Verified · readable" : f.error}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate">{f.name}</p><p className={f.status === "error" ? "break-words text-xs text-destructive" : "text-xs text-muted-foreground"}>{f.status === "checking" ? "Checking access…" : f.status === "ready" ? "Verified · readable" : t(f.error ?? "Could not read this file.")}</p>
+              {f.status === "ready" && <details className="mt-2"><summary className="cursor-pointer text-xs text-primary">{t("View text")}</summary><Textarea aria-label={`${t("Edit extracted text")}: ${f.name}`} className="mt-2 min-h-40 resize-y" value={f.text} onChange={(e) => setVerifiedFiles((prev) => prev.map((item, index) => index === i ? { ...item, text: e.target.value } : item))} /></details>}
+            </div>
             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label={`Discard ${f.name}`} disabled={verifiedFiles.some((item) => item.status === "checking")} onClick={() => setVerifiedFiles((prev) => prev.filter((_, index) => index !== i))}><X className="h-3 w-3" /></Button>
           </div>)}</div>
         </> : <><Textarea aria-label="Topics to follow" value={input} onChange={(e) => { setInput(e.target.value); setTopicError(""); }} onKeyDown={(e) => dialog === "topics" && listKeyDown(e, setInput)} className="min-h-[320px]" placeholder={"1. Forces and motion\n2. Energy transfers\n3. Electricity"} />
           {topicError && <p role="alert" className="text-sm text-destructive">{topicError}</p>}
         </>}
-        <DialogFooter><Button disabled={(dialog === "files" ? !verifiedFiles.length || verifiedFiles.some((f) => f.status !== "ready") : !input.trim())} onClick={() => {
+        <DialogFooter><Button disabled={(dialog === "files" ? !verifiedFiles.length || verifiedFiles.some((f) => f.status !== "ready" || !f.text.trim()) : !input.trim())} onClick={() => {
           if (dialog === "topics") insertTopics();
           else if (dialog === "files") { add(verifiedFiles.map((f) => ({ kind: "file", name: f.name, text: f.text }))); openDialog(null); }
         }}>Insert</Button></DialogFooter>

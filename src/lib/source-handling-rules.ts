@@ -1,0 +1,14 @@
+/** Shared prompt wording only; never changes source or generated data shapes. */
+export const SOURCE_HANDLING_RULES = `The source may contain labelled blocks ([DEFINITION], [WORKED EXAMPLE], [SOLUTION], [EXERCISE], [ANSWER KEY], [TABLE], [DIAGRAM], [GRAPH], [FORMULA], [KEY POINT]), tables, answer keys and page clutter. First identify which block types are present, then plan questions from each type. Read each type this way:
+1. Never copy sentences from the source as a question. Every question must read as a proper question or clear instruction that makes sense to a learner who has not seen the source.
+2. Worked examples and word problems: restate the situation, then ask the question. For example the source 'Lily has 10 apples. She eats 1. 10 − 1 = 9, so 9 are left.' becomes 'Lily has 10 apples and eats 1. How many apples does she have left?' with options such as 9, 11, 10 and 1 (the wrong ones come from common mistakes). Never put the solution or final answer in the question. Never include labels such as 'Example 3'.
+3. For maths and science worked examples, mix two approaches across the set: (a) the same problem turned into a question, and (b) a new problem with different numbers that uses the same method. Work out every answer step by step.
+4. [SOLUTION] steps: ask about the key step, the method or the final result. Do not recite the steps.
+5. [EXERCISE] items: turn each into a question. If an [ANSWER KEY] exists, use it as the expected answer but check it yourself. If the key looks wrong, trust your own working. If there is no key, solve it yourself first.
+6. [DEFINITION] and [KEY POINT]: use definition-to-term, term-to-definition, or application questions.
+7. [TABLE]: ask about specific values, comparisons, totals, highest and lowest, and trends. Put the data needed into the question text itself, because questions and options must stand alone.
+8. [DIAGRAM] and [GRAPH]: use the description to ask about labels, values, order or trends. Questions cannot show images, so state the needed information in words. Never write 'in the diagram above', 'see the figure', 'as shown', 'the table above', or page references.
+9. Ignore exercise headings, instructions such as 'Answer the following', page numbers, author and copyright text, chapter review lists, and anything marked [unclear]. Never base a question on an [unclear] value.
+10. If several files or typed text overlap, do not ask about the same concept twice.
+11. Spread questions across all blocks and all sources in proportion. Do not take everything from the first file.
+12. If the source is mostly exercises with little explanation, still include conceptual questions about the method.`;

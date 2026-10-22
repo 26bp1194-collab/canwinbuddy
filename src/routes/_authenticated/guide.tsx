@@ -64,6 +64,7 @@ const SECTIONS: GuideSection[] = [
       "Title is optional. Subject and Age (7 to 25, optional) help the AI match the right level.",
       "Paste your text into the Notes box. Long pastes turn into a small note bubble you can open, edit or remove.",
       "Tap the + button to add files (PDF, DOCX, XLSX, CSV, TXT, MD or images, up to 20 MB each) or a list of topics to follow.",
+      "Photos, scans and PDFs are read by AI, including tables and diagrams. Clear, well-lit photos work best. If a warning appears, check the text before generating.",
       "AI Text Helper can write study text from a topic description, or improve and fact-check text you already have. Always double-check AI-written facts.",
       "Your work is saved automatically while you stay in the same browser tab.",
     ],

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
 import { generateChatCompletion, GatewayError } from "@lovable.dev/ai-gateway";
+import { SOURCE_HANDLING_RULES } from "./source-handling-rules";
 import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, partitionReviews, pool, QUIZ_CONCURRENCY, type SourceSection } from "./generation-context";
 
 const QuestionSchema = z
@@ -301,6 +302,8 @@ export const analyzeSource = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sourceText, count, difficulty, guidance } = data;
     const system = `You analyse study notes (already converted to plain text, including text read out of images) so quiz questions can be written from them later.
+${SOURCE_HANDLING_RULES}
+Apply these reading/planning rules within the existing analysis fields; do not add output fields.
 - Return ONLY valid JSON: {"topics":[string],"keyFacts":[string],"summaries":[string],"namedTerms":[string],"concepts":[string],"objectives":[string],"keyTerms":[string],"calculations":[string],"sourceQuestions":[string],"coverageNotes":string,"maxQuestions":number}
 - Read the notes carefully from start to finish before answering.
 - "topics": 5-12 distinct topics actually present in the notes, spread across the WHOLE text.
@@ -380,6 +383,8 @@ function genSystemPrompt(difficulty: string, analysis?: Analysis | null, spec?: 
   return `You generate multiple-choice quiz questions from provided source material.
 
 ${levelBlock(difficulty, spec, curriculum)}
+
+${SOURCE_HANDLING_RULES}
 
 RULES:
 - Return ONLY valid JSON of the shape: {"questions":[{"question":string,"choices":[2 to 4 strings],"correctIndex":number,"correctIndexes"?:[number,number],"sourceQuote":string}]}
@@ -601,6 +606,7 @@ const ReviewSchema = z.object({
 });
 
 const REVIEW_SYSTEM = (difficulty: string, analysis?: Analysis | null, spec?: Partial<StyleSpec> | null, guidance?: string | null, curriculum?: string | null, math = true) => `You are a strict quiz quality reviewer.
+${SOURCE_HANDLING_RULES}
 - Return ONLY valid JSON: {"reviews":[{"index":number,"pass":boolean,"issues":[string]}]}
 - Review EVERY question in QUESTIONS TO REVIEW, using its original index. Use SET OVERVIEW only for whole-set comparisons; do not return reviews for overview-only items. "issues" is empty when pass is true.
 ${levelBlock(difficulty, spec, curriculum)}
@@ -1064,6 +1070,7 @@ export const editQuestions = createServerFn({ method: "POST" })
     const { sourceText, questions, instruction, presets, difficulty, spec } = data;
     const asks = [...presets.map((p) => `- ${p}`), instruction.trim() ? `- ${instruction.trim()}` : ""].filter(Boolean);
     const system = `You rewrite existing multiple-choice quiz questions on request.
+${SOURCE_HANDLING_RULES}
 - Return ONLY valid JSON: {"questions":[{"question":string,"choices":[2 to 4 strings],"correctIndex":number,"correctIndexes"?:[number,number],"sourceQuote":string}]}
 - Return EXACTLY ${questions.length} question(s), in the same order as the input.
 - Keep every question grounded in the provided source material; "sourceQuote" must stay a verbatim substring of the source.

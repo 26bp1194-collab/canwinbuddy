@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { SOURCE_HANDLING_RULES } from "./source-handling-rules";
 
 /* Study Notes: a short revision sheet built only from the user's notes. Nothing is saved. */
 
@@ -49,6 +50,8 @@ export const generateStudyNotes = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("AI is not configured");
     const system = `You write concise revision notes (a study sheet) for a learner.
+${SOURCE_HANDLING_RULES}
+For this study sheet apply the block-reading and coverage rules to revision content and selfCheck questions; do not add quiz options or new sections. The source-only revision-note rules below take priority over creating new practice examples.
 RULES:
 - Use ONLY facts stated in the source. Never add outside facts, numbers or examples.
 - Order every list by importance, most important first.
