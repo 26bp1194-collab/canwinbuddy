@@ -122,7 +122,10 @@ function GeneratePage() {
   const [capacityChoice, setCapacityChoice] = useState("1");
 
   /* Restore any in-progress draft + a suggested follow-up quiz */
+  const [ready, setReady] = useState(false);
   useEffect(() => {
+    /* Run once: a repeated run (e.g. dev double-mount) must not reapply defaults over a restored draft. */
+    if (restored.current) return;
     const draft = getDraft();
     const defaults = getQuizDefaults();
     const prefill = takeGeneratePrefill();
@@ -200,11 +203,13 @@ function GeneratePage() {
       }
     }
     restored.current = true;
+    setReady(true);
   }, [t]);
 
   /* Persist the whole page state (text AND settings) so navigating away never loses work */
   useEffect(() => {
-    if (!restored.current || finished.current) return;
+    /* Wait for the commit after restoration so stale initial state never overwrites the draft. */
+    if (!ready || finished.current) return;
     const d = getQuizDefaults();
     const settingsAreDefault =
       mode === "simple" &&
@@ -222,7 +227,7 @@ function GeneratePage() {
       return;
     }
     saveDraft({ source, noteSources, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, step: generateStep, defaultsSig: quizDefaultsSignature() });
-  }, [source, noteSources, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
+  }, [ready, source, noteSources, title, count, countText, difficulty, curriculum, customCurriculum, spec, mode, specs, subjects, audiences, instructions, generateStep]);
 
 
   const resetSettings = () => {
