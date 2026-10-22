@@ -11,4 +11,7 @@ export const SOURCE_HANDLING_RULES = `The source may contain labelled blocks ([D
 9. Ignore exercise headings, instructions such as 'Answer the following', page numbers, author and copyright text, chapter review lists, and anything marked [unclear]. Never base a question on an [unclear] value.
 10. If several files or typed text overlap, do not ask about the same concept twice.
 11. Spread questions across all blocks and all sources in proportion. Do not take everything from the first file.
-12. If the source is mostly exercises with little explanation, still include conceptual questions about the method.`;
+12. If the source is mostly exercises with little explanation, still include conceptual questions about the method.
+13. Self-contained check: every question must state all values and conditions needed to answer it, and the answer must follow from what the question states plus the source. Never ask for a value (e.g. a recorded duration or reading) that cannot be worked out from the information given in the question.
+14. Never state or imply a cause, effect or relationship the source does not establish; only the source's own stated relationships may be tested.
+15. When the source repeats the same kind of data (e.g. many samples), do not write several questions using the same method on different numbers; test different skills, comparisons and concepts instead.`;
