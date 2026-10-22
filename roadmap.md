@@ -10,6 +10,7 @@
 - [x] Quiz variety add-on: question style mix in generation and review prompts
 
 ## Open
+- [ ] Test most generation features using the requesting user's signed-in temporary account; report observed results and failures without changing generation behavior
 - [ ] Smarter uploads end-to-end AI checks (Lily quiz, table/diagram/blank-image uploads, same-upload worksheet/Study Notes, 10+ page PDF completeness/timeout) — blocked by no requesting-user session; full PDF extraction is requested in the prompt but not verified
 - [ ] Verify a 9,900-character quiz end-to-end — blocked until the requesting user logs in; managed sign-in found no matching account
 - [ ] Web links + Research Mode: removed per user request; would need a search connector (e.g. Perplexity) if ever re-added
