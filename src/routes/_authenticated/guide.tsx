@@ -201,24 +201,6 @@ function GuidePage() {
         <Placeholder icon={Copy} title={t("3. Play or export")} body={t("Play in the app, share a link, or export to Blooket, Gimkit or Kahoot.")} />
       </div>
 
-      <section className="panel mt-8 p-4 sm:p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Video className="h-4 w-4 shrink-0 text-primary" /> {t("Video walkthrough")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("A tour of CanWinBuddy: add notes, customise, then play, share or export.")}
-        </p>
-        <video
-          className="mt-4 aspect-video w-full rounded-xl border border-border bg-black"
-          controls
-          playsInline
-          preload="metadata"
-          poster={guidePoster.url}
-          src={guideVideo.url}
-        >
-          {t("Your browser cannot play this video.")}
-        </video>
-      </section>
 
       <Accordion type="single" collapsible defaultValue="getting-started" className="panel mt-8 px-4 sm:px-6">
         {SECTIONS.map((section) => (
@@ -240,16 +222,38 @@ function GuidePage() {
         ))}
       </Accordion>
 
+      <section className="panel mt-8 p-4 sm:p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Video className="h-4 w-4 shrink-0 text-primary" /> {t("Video walkthrough")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("A tour of CanWinBuddy: add notes, customise, then play, share or export.")}
+        </p>
+        <video
+          className="mt-4 aspect-video w-full rounded-xl border border-border bg-black"
+          controls
+          playsInline
+          preload="metadata"
+          poster={guidePoster.url}
+          src={guideVideo.url}
+        >
+          {t("Your browser cannot play this video.")}
+        </video>
+      </section>
+
       <div className="mt-8 flex justify-center">
         <Button asChild>
           <Link to="/generate">{t("Start generating")}</Link>
         </Button>
       </div>
 
-      <p className="mt-10 text-center text-xs text-muted-foreground">
-        {t("Designed & developed by")}{" "}
-        <span className="font-medium text-foreground">Loke Ken Win</span>
-      </p>
+      <div className="mt-10 text-center">
+        <h2 className="text-sm font-semibold tracking-wide text-foreground">{t("Credits")}</h2>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {t("CanWinBuddy, a study app")} {t("designed & developed by")}{" "}
+          <span className="font-medium text-foreground">Loke Ken Win</span>
+        </p>
+      </div>
     </div>
   );
 }
