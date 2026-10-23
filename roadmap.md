@@ -8,6 +8,7 @@
 - [x] Compact Notes Space: unified editor, "+" menu (files, topics), source bubbles with confirm-remove, compact paste bubbles (≥300 chars) with side editor
 - [x] Final polish: real Guide page (accordion, 10 sections, Start generating), account deletion now removes worksheets + quiz results, refreshed llms.txt and Generate/Export descriptions, added Malay language
 - [x] Quiz variety add-on: question style mix in generation and review prompts
+- [x] Credits line "Designed & developed by Loke Ken Win" at the bottom of Guide and Settings, plus the author's walkthrough video with cover image in a Guide video panel
 
 ## Open
 - [x] Tested most generation features with the requesting user's temporary account; live results and limitations recorded in GENERATION_TEST_RESULTS.md; no application behavior changed
