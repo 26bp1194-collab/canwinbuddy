@@ -202,6 +202,7 @@ function GuidePage() {
       </div>
 
 
+
       <Accordion type="single" collapsible defaultValue="getting-started" className="panel mt-8 px-4 sm:px-6">
         {SECTIONS.map((section) => (
           <AccordionItem key={section.id} value={section.id}>
