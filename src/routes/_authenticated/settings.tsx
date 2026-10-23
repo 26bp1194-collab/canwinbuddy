@@ -443,6 +443,11 @@ function SettingsPage() {
 
       </div>
 
+      <p className="mt-10 text-center text-xs text-muted-foreground">
+        {t("Designed & developed by")}{" "}
+        <span className="font-medium text-foreground">Loke Ken Win</span>
+      </p>
+
 
       <AnimatePresence>
         {dirty && (
