@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Current request
-- [ ] Refresh vulnerable transitive dependencies without forced versions, update zod, verify lockfile versions and app build, and rerun the dependency scan.
+- [x] Refresh vulnerable transitive dependencies without forced versions, upgrade zod to 4.6.7, verify every patched version in bun.lock; dependency scan reports no known vulnerabilities in 57 checked production dependencies, app build is clean and 40 tests pass (xlsx registry scan unavailable).
 - [x] Limit quiz regeneration to two rounds after initial writing, cap AI Text Helper output at 4,096 tokens and internal summaries at 256 tokens; reviewed changes, 19 focused checks pass and app build is clean.
 
 ## Done
