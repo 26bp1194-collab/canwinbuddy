@@ -1,5 +1,8 @@
 # Roadmap
 
+## Current request
+- [ ] Limit quiz regeneration to two rounds, enforce AI Text Helper output-token ceilings, and review the changes.
+
 ## Done
 - [x] Smarter uploads: faithful document prompt with every-PDF-page instruction, DOCX semantic text/tables/image markers, labelled spreadsheet sheets, unreadable rejection and unclear warning, editable extracted file text, shared textbook prompts and Guide update; 35 tests and real browser DOCX/XLSX parsing pass
 - [x] Disable highlighting outside editable fields; adaptive five/ten-question generation with exact remainders and five rolling generation/review/repair requests; reuse source indexing across review and repair; 27 tests pass and sign-up selection verified

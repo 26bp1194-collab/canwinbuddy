@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getCorrectIndexes, normalizeAnswers } from "./question-utils";
 import { generateChatCompletion, GatewayError } from "@lovable.dev/ai-gateway";
 import { SOURCE_HANDLING_RULES } from "./source-handling-rules";
+import { MAX_REGENERATION_ROUNDS, MAX_GENERATION_ROUNDS, TEXT_HELPER_MAX_TOKENS, TEXT_HELPER_SUMMARY_MAX_TOKENS } from "./ai-limits";
 import { splitSource, splitEvidenceSource, selectEvidence, generationBatchSize, hasMathContext, uniqueText, partitionReviews, pool, QUIZ_CONCURRENCY, type SourceSection } from "./generation-context";
 
 const QuestionSchema = z
@@ -509,7 +510,7 @@ export const generateQuestions = createServerFn({ method: "POST" })
     let batch = generationBatchSize(count);
     const validated: Question[] = [];
     const seen = new Set<string>();
-    const maxRounds = Math.ceil(count / (batch * PARALLEL_BATCHES)) * 2 + 4;
+    const maxRounds = MAX_GENERATION_ROUNDS;
     const deadline = Date.now() + STEP_DEADLINE_MS;
     let rounds = 0;
     let emptyStreak = 0;
@@ -749,7 +750,7 @@ const ReviewInput = z.object({
   spec: StyleSpecSchema.partial().optional(),
 });
 
-const MAX_REVIEW_ROUNDS = 3;
+const MAX_REVIEW_ROUNDS = MAX_REGENERATION_ROUNDS;
 const GLOBAL_REGEN_CAP = 150;
 const REPAIR_PARALLEL = QUIZ_CONCURRENCY;
 
@@ -768,7 +769,7 @@ export const reviewAndRepair = createServerFn({ method: "POST" })
        and re-verified, for a few rounds. After that the current version is kept. */
     const current: Question[] = [...questions];
     let regenerated = 0;
-    let budget = GLOBAL_REGEN_CAP;
+    let budget = Math.min(GLOBAL_REGEN_CAP, questions.length * MAX_REGENERATION_ROUNDS);
     let rounds = 0;
     let stillFailing = 0;
     let reviewIncomplete = false;
@@ -936,6 +937,7 @@ ${MATH_RULES}`;
                 { role: "user", content: existingText.slice(0, 20000) },
               ],
               false,
+              { maxTokens: TEXT_HELPER_SUMMARY_MAX_TOKENS },
             )
           )?.trim() ?? "";
       }
@@ -957,6 +959,7 @@ ${MATH_RULES}`;
         { role: "user", content: user },
       ],
       false,
+      { maxTokens: TEXT_HELPER_MAX_TOKENS },
     ))?.trim();
 
     if (!text) throw new Error("No text returned");
