@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Current request
-- [ ] Limit quiz regeneration to two rounds, enforce AI Text Helper output-token ceilings, and review the changes.
+- [x] Limit quiz regeneration to two rounds after initial writing, cap AI Text Helper output at 4,096 tokens and internal summaries at 256 tokens; reviewed changes, 19 focused checks pass and app build is clean.
 
 ## Done
 - [x] Smarter uploads: faithful document prompt with every-PDF-page instruction, DOCX semantic text/tables/image markers, labelled spreadsheet sheets, unreadable rejection and unclear warning, editable extracted file text, shared textbook prompts and Guide update; 35 tests and real browser DOCX/XLSX parsing pass
